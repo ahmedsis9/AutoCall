@@ -11,5 +11,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "AutoCall"
+rootProject.name = "Hamko"
 include(":app")
