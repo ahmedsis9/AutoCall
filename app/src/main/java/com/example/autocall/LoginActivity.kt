@@ -22,15 +22,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
-/** تسجيل دخول للحسابات المسجّلة + إنشاء حساب جديد + نسيت كلمة المرور + ربط Google. */
+/** شاشة بسيطة: تسجيل دخول (معرّف + كلمة مرور) أو حساب جديد (معرّف + كلمة مرور + تأكيدها). */
 class LoginActivity : Activity() {
 
-    private enum class Mode { LOGIN, REGISTER, FORGOT }
-
-    private var mode = Mode.LOGIN
+    private var registerMode = false
+    private var prefill = ""
     private lateinit var card: LinearLayout
-    private var question = ""
-    private var forgotEmail: String? = null   // بعد نجاح الخطوة الأولى في «نسيت كلمة المرور»
     private val rcGoogle = 301
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,32 +81,15 @@ class LoginActivity : Activity() {
         Ui.attachTilt(card)
         col.addView(card, Ui.lp(c))
 
-        mode = if (Auth.hasAccounts(c)) Mode.LOGIN else Mode.REGISTER
+        registerMode = !Auth.hasAccounts(c)
         render()
 
         setContentView(root)
         Ui.rtl(root)
     }
 
-    // ------------------------------------------------------------------ العرض
-
-    private fun render() {
-        card.removeAllViews()
-        when (mode) {
-            Mode.LOGIN -> renderLogin()
-            Mode.REGISTER -> renderRegister()
-            Mode.FORGOT -> renderForgot()
-        }
-    }
-
-    private fun heading(title: String, sub: String) {
-        val c: Context = this
-        card.addView(Ui.text(c, title, 22f, Ui.TEXT, true), Ui.lp(c, bottom = 4))
-        card.addView(Ui.text(c, sub, 14f, Ui.MUTED), Ui.lp(c, bottom = 16))
-    }
-
-    private fun emailField(): EditText =
-        Ui.input(this, "البريد الإلكتروني", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
+    private fun idField(): EditText =
+        Ui.input(this, "البريد أو اسم المستخدم", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
 
     private fun passField(hint: String): EditText =
         Ui.input(this, hint, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
@@ -125,163 +105,89 @@ class LoginActivity : Activity() {
         }
     }
 
-    private fun renderLogin() {
+    private fun render() {
         val c: Context = this
-        heading("تسجيل الدخول", "مرحباً بعودتك، أدخل بيانات حسابك")
+        card.removeAllViews()
 
-        val email = emailField()
-        card.addView(email, Ui.lp(c, bottom = 10))
-        val pass = passField("كلمة المرور")
-        card.addView(pass, Ui.lp(c, bottom = 6))
-
-        card.addView(link("هل نسيت كلمة المرور؟", Ui.WARN) {
-            forgotEmail = null
-            mode = Mode.FORGOT
-            render()
-        }, Ui.lp(c, bottom = 6))
-
-        val btn = Ui.button(c, "دخول")
-        card.addView(btn, Ui.lp(c, top = 4))
-        btn.setOnClickListener {
-            val err = Auth.login(c, email.text.toString(), pass.text.toString())
-            if (err != null) toast(err) else enter()
-        }
-
-        addGoogle()
-
-        card.addView(link("ليس لديك حساب؟ أنشئ حساباً جديداً") {
-            mode = Mode.REGISTER
-            render()
-        }, Ui.lp(c, top = 6))
-    }
-
-    private fun renderRegister() {
-        val c: Context = this
-        heading("إنشاء حساب جديد", "أنشئ حسابك للبدء بجدولة مكالماتك")
-
-        val name = Ui.input(c, "الاسم")
-        card.addView(name, Ui.lp(c, bottom = 10))
-        val email = emailField()
-        card.addView(email, Ui.lp(c, bottom = 10))
-        val pass = passField("كلمة المرور (${Auth.MIN_PASS} أحرف على الأقل)")
-        card.addView(pass, Ui.lp(c, bottom = 10))
-        val confirm = passField("تأكيد كلمة المرور")
-        card.addView(confirm, Ui.lp(c, bottom = 10))
-
-        // سؤال الأمان لاسترجاع كلمة المرور لاحقاً
-        val qBtn = Ui.text(c, if (question.isEmpty()) "اختر سؤال الأمان ▾" else question, 15f,
-            if (question.isEmpty()) Ui.MUTED else Ui.TEXT).apply {
-            background = Ui.shape(c, Ui.INPUT_BG, 14, Ui.STROKE)
-            val v = Ui.dp(c, 14)
-            setPadding(v, v, v, v)
-            isClickable = true
-        }
-        card.addView(qBtn, Ui.lp(c, bottom = 10))
-        val answer = Ui.input(c, "جواب سؤال الأمان")
-        card.addView(answer, Ui.lp(c, bottom = 4))
         card.addView(
-            Ui.text(c, "يُستخدم السؤال لاستعادة كلمة المرور إن نسيتها.", 12f, Ui.MUTED),
-            Ui.lp(c, bottom = 10)
+            Ui.text(c, if (registerMode) "إنشاء حساب" else "تسجيل الدخول", 22f, Ui.TEXT, true),
+            Ui.lp(c, bottom = 14)
         )
-        qBtn.setOnClickListener {
-            Ui.showDialog(
-                this,
-                Ui.builder(this).setTitle("سؤال الأمان")
-                    .setItems(Auth.QUESTIONS.toTypedArray()) { _, i ->
-                        question = Auth.QUESTIONS[i]
-                        qBtn.text = question
-                        qBtn.setTextColor(Ui.TEXT)
-                    }
-            )
+
+        val id = idField()
+        if (prefill.isNotEmpty()) {
+            id.setText(prefill)
+            prefill = ""
         }
+        card.addView(id, Ui.lp(c, bottom = 10))
 
-        val btn = Ui.button(c, "إنشاء الحساب")
-        card.addView(btn, Ui.lp(c, top = 4))
-        btn.setOnClickListener {
-            if (pass.text.toString() != confirm.text.toString()) {
-                toast("كلمتا المرور غير متطابقتين")
-                return@setOnClickListener
-            }
-            val err = Auth.register(
-                c, name.text.toString(), email.text.toString(), pass.text.toString(),
-                question, answer.text.toString()
-            )
-            if (err != null) toast(err) else enter()
-        }
+        if (registerMode) {
+            val pass = passField("كلمة مرور جديدة")
+            card.addView(pass, Ui.lp(c, bottom = 10))
+            val confirm = passField("تأكيد كلمة المرور")
+            card.addView(confirm, Ui.lp(c, bottom = 10))
 
-        addGoogle()
-
-        if (Auth.hasAccounts(c)) {
-            card.addView(link("لديك حساب؟ سجّل الدخول") {
-                mode = Mode.LOGIN
-                render()
-            }, Ui.lp(c, top = 6))
-        }
-    }
-
-    private fun renderForgot() {
-        val c: Context = this
-        heading("استعادة كلمة المرور", "أجب عن سؤال الأمان لتعيين كلمة مرور جديدة")
-
-        val email = emailField()
-        val fe = forgotEmail
-        if (fe == null) {
-            card.addView(email, Ui.lp(c, bottom = 10))
-            val next = Ui.button(c, "التالي")
-            card.addView(next, Ui.lp(c, top = 4))
-            next.setOnClickListener {
-                val e = email.text.toString()
-                if (!Auth.exists(c, e)) {
-                    toast("لا يوجد حساب بهذا البريد")
-                    return@setOnClickListener
-                }
-                if (Auth.questionFor(c, e) == null) {
-                    toast("هذا الحساب مرتبط بـ Google ولا يملك كلمة مرور، استخدم زر Google")
-                    return@setOnClickListener
-                }
-                forgotEmail = e
-                render()
-            }
-        } else {
-            card.addView(Ui.text(c, fe, 14f, Ui.ACCENT, true), Ui.lp(c, bottom = 8))
-            card.addView(
-                Ui.text(c, Auth.questionFor(c, fe) ?: "", 16f, Ui.TEXT, true),
-                Ui.lp(c, bottom = 8)
-            )
-            val answer = Ui.input(c, "جواب سؤال الأمان")
-            card.addView(answer, Ui.lp(c, bottom = 10))
-            val np = passField("كلمة المرور الجديدة")
-            card.addView(np, Ui.lp(c, bottom = 10))
-            val cp = passField("تأكيد كلمة المرور الجديدة")
-            card.addView(cp, Ui.lp(c, bottom = 10))
-            val btn = Ui.button(c, "تعيين كلمة مرور جديدة")
+            val btn = Ui.button(c, "إنشاء الحساب")
             card.addView(btn, Ui.lp(c, top = 4))
             btn.setOnClickListener {
-                if (np.text.toString() != cp.text.toString()) {
-                    toast("كلمتا المرور غير متطابقتين")
-                    return@setOnClickListener
-                }
-                val err = Auth.resetPassword(c, fe, answer.text.toString(), np.text.toString())
-                if (err != null) toast(err) else {
-                    toast("تم تعيين كلمة المرور الجديدة")
-                    enter()
-                }
+                val err = Auth.register(c, id.text.toString(), pass.text.toString(), confirm.text.toString())
+                if (err != null) toast(err) else enter()
+            }
+        } else {
+            val pass = passField("كلمة المرور")
+            card.addView(pass, Ui.lp(c, bottom = 6))
+
+            card.addView(link("هل نسيت كلمة المرور؟", Ui.WARN) { forgot(id.text.toString()) }, Ui.lp(c, bottom = 6))
+
+            val btn = Ui.button(c, "دخول")
+            card.addView(btn, Ui.lp(c, top = 4))
+            btn.setOnClickListener {
+                val err = Auth.login(c, id.text.toString(), pass.text.toString())
+                if (err != null) toast(err) else enter()
             }
         }
-        card.addView(link("العودة لتسجيل الدخول", Ui.MUTED) {
-            forgotEmail = null
-            mode = Mode.LOGIN
+
+        addGoogle()
+
+        card.addView(
+            link(if (registerMode) "لديك حساب؟ سجّل الدخول" else "ليس لديك حساب؟ أنشئ حساباً جديداً") {
+                registerMode = !registerMode
+                render()
+            },
+            Ui.lp(c, top = 6)
+        )
+    }
+
+    /** نسيت كلمة المرور: يُعاد إنشاء الحساب بكلمة جديدة وتبقى مواعيده. */
+    private fun forgot(idText: String) {
+        if (idText.isBlank()) {
+            toast("اكتب البريد أو اسم المستخدم أولاً ثم اضغط «نسيت كلمة المرور»")
+            return
+        }
+        if (!Auth.exists(this, idText)) {
+            toast("لا يوجد حساب بهذا الاسم")
+            return
+        }
+        Ui.confirm(
+            this, "كلمة مرور جديدة",
+            "سيُفتح لك إنشاء كلمة مرور جديدة للحساب «${Auth.normalize(idText)}» وستبقى مواعيدك محفوظة.",
+            "متابعة"
+        ) {
+            Auth.resetAccount(this, idText)
+            prefill = Auth.normalize(idText)
+            registerMode = true
             render()
-        }, Ui.lp(c, top = 8))
+        }
     }
 
     // ------------------------------------------------------------------ Google
 
     private fun addGoogle() {
         val c: Context = this
-        val divider = Ui.text(c, "— أو —", 13f, Ui.MUTED).apply { gravity = Gravity.CENTER }
-        card.addView(divider, Ui.lp(c, top = 14, bottom = 10))
-
+        card.addView(
+            Ui.text(c, "— أو —", 13f, Ui.MUTED).apply { gravity = Gravity.CENTER },
+            Ui.lp(c, top = 14, bottom = 10)
+        )
         val label = "G   المتابعة عبر حساب Google"
         val sp = SpannableString(label).apply {
             setSpan(ForegroundColorSpan(Color.parseColor("#4285F4")), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -329,8 +235,6 @@ class LoginActivity : Activity() {
             }
         }
     }
-
-    // ------------------------------------------------------------------ أدوات
 
     private fun enter() {
         startActivity(Intent(this, MainActivity::class.java))

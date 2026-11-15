@@ -2,15 +2,20 @@ package com.example.autocall
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -58,6 +63,9 @@ class MainActivity : Activity() {
         // اطلب الأذونات من البداية كي تكون جاهزة قبل أول موعد
         val need = ArrayList<String>()
         if (!CallHelper.hasPermission(this)) need.add(Manifest.permission.CALL_PHONE)
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            need.add(Manifest.permission.READ_PHONE_STATE)
+        }
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) need.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -91,7 +99,7 @@ class MainActivity : Activity() {
 
         val root = FrameLayout(c).apply { setBackgroundColor(Ui.BG) }
         root.addView(
-            CinematicBackground(c).apply { intensity = 0.55f },
+            CinematicBackground(c).apply { intensity = 0.3f },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
         val col = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
@@ -100,41 +108,42 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
 
-        // ----- الترويسة -----
+        // ----- الترويسة: تحية كبيرة + صورة الحساب -----
         val header = LinearLayout(c).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val p = Ui.dp(c, 20)
-            setPadding(p, Ui.dp(c, 16), p, Ui.dp(c, 6))
+            setPadding(p, Ui.dp(c, 18), p, Ui.dp(c, 10))
         }
         val titles = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(
-            Ui.text(c, Ui.APP_NAME, 34f, Color.WHITE, true).apply {
+            Ui.text(c, Ui.APP_NAME, 18f, Ui.ACCENT, true).apply {
                 typeface = Ui.fancyFont()
-                setShadowLayer(18f, 0f, 0f, Ui.PRIMARY)
+                setShadowLayer(12f, 0f, 0f, Ui.ACCENT)
             }
         )
-        val greet = Ui.text(c, "", 14f, Ui.ACCENT)
+        val greet = Ui.text(c, "", 24f, Color.WHITE, true)
         greetingTv = greet
         titles.addView(greet, Ui.lp(c, top = 2))
+        titles.addView(Ui.text(c, formatDateLong(System.currentTimeMillis()), 13f, Ui.MUTED), Ui.lp(c, top = 2))
         header.addView(titles, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         val initial = Auth.userName(c).trim().take(1).uppercase(Locale.ROOT).ifEmpty { "؟" }
-        val avatar = Ui.text(c, initial, 18f, Color.WHITE, true).apply {
+        val avatar = Ui.text(c, initial, 20f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
-            background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 22)
+            background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 24)
             elevation = Ui.dp(c, 6).toFloat()
             isClickable = true
             setOnClickListener { accountDialog() }
         }
-        header.addView(avatar, LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44)))
+        header.addView(avatar, LinearLayout.LayoutParams(Ui.dp(c, 48), Ui.dp(c, 48)))
         col.addView(header, Ui.lp(c))
 
         // ----- محتوى قابل للتمرير -----
         val content = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             val p = Ui.dp(c, 16)
-            setPadding(p, Ui.dp(c, 8), p, Ui.dp(c, 120))
+            setPadding(p, Ui.dp(c, 6), p, Ui.dp(c, 120))
         }
         val scroll = ScrollView(c).apply {
             clipToPadding = false
@@ -143,34 +152,40 @@ class MainActivity : Activity() {
         }
         col.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // بطاقة «المكالمة القادمة» الذكية
+        // بطاقة «الاتصال القادم»: تدرّج ملوّن وعدّاد كبير
         val hero = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            background = Ui.glass(c, 26, Ui.alpha(Ui.ACCENT, 140))
-            val p = Ui.dp(c, 18)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.parseColor("#3D7BFF"), Color.parseColor("#7B4DFF"))
+            ).apply { cornerRadius = Ui.dp(c, 28).toFloat() }
+            val p = Ui.dp(c, 20)
             setPadding(p, p, p, p)
             elevation = Ui.dp(c, 14).toFloat()
         }
         Ui.attachTilt(hero)
-        val hl = Ui.text(c, "", 13f, Ui.MUTED, true).apply { gravity = Gravity.CENTER }
-        val hc = Ui.text(c, "--:--:--", 40f, Color.WHITE, true).apply {
-            gravity = Gravity.CENTER
-            typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
-            setShadowLayer(20f, 0f, 0f, Ui.ACCENT)
+        val hl = Ui.text(c, "", 14f, Ui.alpha(Color.WHITE, 200), true)
+        val hc = Ui.text(c, "--:--:--", 44f, Color.WHITE, true).apply {
+            typeface = Typeface.create("monospace", Typeface.BOLD)
             layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.START
         }
-        val hs = Ui.text(c, "", 14f, Ui.TEXT).apply { gravity = Gravity.CENTER }
+        val hs = Ui.text(c, "", 15f, Color.WHITE, true)
         heroLabel = hl
         heroCount = hc
         heroSub = hs
         hero.addView(hl, Ui.lp(c))
-        hero.addView(hc, Ui.lp(c, top = 2))
-        hero.addView(hs, Ui.lp(c, top = 4))
-        content.addView(hero, Ui.lp(c, bottom = 14))
+        hero.addView(hc, Ui.lp(c, top = 4))
+        hero.addView(hs, Ui.lp(c, top = 6))
+        content.addView(hero, Ui.lp(c, bottom = 16))
 
-        // تبويبات الحالات
-        val tabs = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
+        // شريط تبويبات على شكل حبّة
+        val tabs = LinearLayout(c).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Ui.glass(c, 24, Ui.alpha(Color.WHITE, 40))
+            val p = Ui.dp(c, 4)
+            setPadding(p, p, p, p)
+        }
         tabsRow = tabs
         content.addView(tabs, Ui.lp(c, bottom = 12))
 
@@ -183,14 +198,13 @@ class MainActivity : Activity() {
         listBox = list
         content.addView(list, Ui.lp(c))
 
-        // ----- زر + -----
-        val fabSize = Ui.dp(c, 66)
-        val fab = TextView(c).apply {
-            text = "+"
-            textSize = 36f
-            setTextColor(Color.WHITE)
+        // ----- زر إضافة عائم على شكل حبّة -----
+        val fab = Ui.text(c, "＋  اتصال جديد", 16f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
-            background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 33)
+            background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 30)
+            val h = Ui.dp(c, 22)
+            val v = Ui.dp(c, 15)
+            setPadding(h, v, h, v)
             elevation = Ui.dp(c, 12).toFloat()
             isClickable = true
             setOnClickListener { AlarmEditor.show(this@MainActivity, null) { render() } }
@@ -198,9 +212,8 @@ class MainActivity : Activity() {
         Ui.attachTilt(fab)
         root.addView(
             fab,
-            FrameLayout.LayoutParams(fabSize, fabSize).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                marginEnd = Ui.dp(c, 22)
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 bottomMargin = Ui.dp(c, 26)
             }
         )
@@ -229,7 +242,7 @@ class MainActivity : Activity() {
             h in 17..21 -> "مساء الخير"
             else -> "ليلة هادئة"
         }
-        greetingTv?.text = "$g، ${Auth.userName(this)}"
+        greetingTv?.text = "$g، ${Auth.userName(this)} 👋"
     }
 
     private fun nextUpcoming(): Pair<AlarmItem, Long>? =
@@ -241,9 +254,9 @@ class MainActivity : Activity() {
     private fun updateHero() {
         val n = nextUpcoming()
         if (n == null) {
-            heroLabel?.text = "المكالمة القادمة"
+            heroLabel?.text = "📞 الاتصال القادم"
             heroCount?.text = "--:--:--"
-            heroSub?.text = "لا توجد مواعيد مجدولة • اضغط + لإضافة موعد"
+            heroSub?.text = "لا توجد مكالمات مجدولة • اضغط «اتصال جديد»"
             return
         }
         val (a, t) = n
@@ -251,8 +264,8 @@ class MainActivity : Activity() {
         val days = s / 86400L
         s %= 86400L
         val clock = String.format(Locale.US, "%02d:%02d:%02d", s / 3600L, (s % 3600L) / 60L, s % 60L)
-        heroLabel?.text = if (a.autoCall) "📞 المكالمة القادمة بعد" else "🔔 التنبيه القادم بعد"
-        heroCount?.text = if (days > 0L) "$days ي  $clock" else clock
+        heroLabel?.text = "📞 الاتصال القادم بعد"
+        heroCount?.text = if (days > 0L) "${days}d $clock" else clock
         heroSub?.text = a.name + " • " + formatStamp(t)
     }
 
@@ -267,30 +280,20 @@ class MainActivity : Activity() {
             Triple(AlarmItem.COMPLETED, "مكتملة", items.count { it.status == AlarmItem.COMPLETED }),
             Triple(AlarmItem.CANCELED, "ملغية", items.count { it.status == AlarmItem.CANCELED })
         )
-        defs.forEachIndexed { i, (st, label, count) ->
+        defs.forEach { (st, label, count) ->
             val sel = filter == st
-            val col = if (st == -1) Ui.PRIMARY else Ui.statusColor(st)
-            val tab = LinearLayout(c).apply {
-                orientation = LinearLayout.VERTICAL
+            val tab = Ui.text(c, "$label $count", 13f, if (sel) Color.WHITE else Ui.MUTED, true).apply {
                 gravity = Gravity.CENTER
-                background = if (sel) Ui.gradient(c, Ui.alpha(col, 230), Ui.alpha(Ui.VIOLET, 200), 16)
-                else Ui.glass(c, 16, Ui.alpha(col, 90))
-                val v = Ui.dp(c, 8)
-                setPadding(v, v, v, v)
-                elevation = Ui.dp(c, if (sel) 8 else 2).toFloat()
+                if (sel) background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 20)
+                val v = Ui.dp(c, 10)
+                setPadding(Ui.dp(c, 4), v, Ui.dp(c, 4), v)
                 isClickable = true
                 setOnClickListener {
                     filter = st
                     render()
                 }
             }
-            tab.addView(Ui.text(c, count.toString(), 20f, Color.WHITE, true).apply { gravity = Gravity.CENTER })
-            tab.addView(Ui.text(c, label, 12f, if (sel) Color.WHITE else Ui.MUTED, true).apply { gravity = Gravity.CENTER })
-            Ui.attachTilt(tab)
-            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                if (i > 0) marginStart = Ui.dp(c, 8)
-            }
-            row.addView(tab, lp)
+            row.addView(tab, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
     }
 
@@ -312,6 +315,25 @@ class MainActivity : Activity() {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 103)
             })
         }
+        if (!CallHelper.canOverlay(c)) {
+            issues.add(Issue("اسمح بـ «العرض فوق التطبيقات» ليتصل Hamko مباشرة والجهاز مقفل.", "السماح") {
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                } catch (e: Exception) {
+                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                }
+            })
+        }
+        val nmgr = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 34 && !nmgr.canUseFullScreenIntent()) {
+            issues.add(Issue("فعّل «الإشعارات بملء الشاشة» لضمان ظهور شاشة الاتصال فوق القفل.", "تفعيل") {
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName")))
+                } catch (e: Exception) {
+                    startActivity(Intent(Settings.ACTION_SETTINGS))
+                }
+            })
+        }
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!pm.isIgnoringBatteryOptimizations(packageName)) {
             issues.add(Issue("لضمان العمل والجهاز مقفل، اجعل البطارية لـ Hamko «بدون قيود».", "الإعدادات") {
@@ -325,7 +347,7 @@ class MainActivity : Activity() {
 
         if (issues.isEmpty()) {
             box.addView(
-                Ui.text(c, "✅ النظام جاهز • ستُنفَّذ المكالمات في موعدها حتى والشاشة مقفلة", 12f, Ui.SUCCESS, true)
+                Ui.text(c, "✅ كل شيء جاهز • ستُنفَّذ المكالمات في موعدها حتى والشاشة مقفلة", 12f, Ui.SUCCESS, true)
                     .apply { gravity = Gravity.CENTER },
                 Ui.lp(c)
             )
@@ -334,11 +356,11 @@ class MainActivity : Activity() {
 
         val wrap = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
-            background = Ui.glass(c, 18, Ui.alpha(Ui.WARN, 150))
+            background = Ui.glass(c, 20, Ui.alpha(Ui.WARN, 150))
             val p = Ui.dp(c, 14)
             setPadding(p, p, p, p)
         }
-        wrap.addView(Ui.text(c, "⚠️ فحص ذكي للنظام", 14f, Ui.WARN, true), Ui.lp(c, bottom = 6))
+        wrap.addView(Ui.text(c, "⚠️ لضمان نجاح الاتصال التلقائي", 14f, Ui.WARN, true), Ui.lp(c, bottom = 6))
         issues.forEach { issue ->
             val row = LinearLayout(c).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -349,15 +371,15 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             )
             val fixBtn = Ui.text(c, issue.fixLabel, 13f, Ui.BG, true).apply {
-                background = Ui.shape(c, Ui.WARN, 12)
-                val h = Ui.dp(c, 12)
+                background = Ui.shape(c, Ui.WARN, 14)
+                val h = Ui.dp(c, 14)
                 val v = Ui.dp(c, 7)
                 setPadding(h, v, h, v)
                 isClickable = true
                 setOnClickListener { issue.fix() }
             }
             row.addView(fixBtn, Ui.lp(c, w = LinearLayout.LayoutParams.WRAP_CONTENT, start = 8))
-            wrap.addView(row, Ui.lp(c, top = 4))
+            wrap.addView(row, Ui.lp(c, top = 6))
         }
         box.addView(wrap, Ui.lp(c))
     }
@@ -378,7 +400,7 @@ class MainActivity : Activity() {
             )
 
         if (shown.isEmpty()) {
-            val msg = if (all.isEmpty()) "لا توجد مواعيد بعد\nاضغط + لإضافة أول موعد"
+            val msg = if (all.isEmpty()) "📞\nلا توجد مكالمات بعد\nاضغط «اتصال جديد» لإضافة أول موعد"
             else "لا توجد مواعيد في هذا التبويب"
             container.addView(
                 Ui.text(c, msg, 16f, Ui.MUTED).apply {
@@ -393,11 +415,22 @@ class MainActivity : Activity() {
         shown.forEach { container.addView(card(it)) }
     }
 
+    private fun chip(text: String, color: Int): TextView {
+        val c: Context = this
+        return Ui.text(c, text, 12f, color, true).apply {
+            background = Ui.shape(c, Ui.alpha(color, 35), 12)
+            val h = Ui.dp(c, 10)
+            val v = Ui.dp(c, 4)
+            setPadding(h, v, h, v)
+        }
+    }
+
     private fun action(label: String, color: Int, onClick: () -> Unit): TextView {
         val c: Context = this
-        return Ui.text(c, label, 14f, color, true).apply {
+        return Ui.text(c, label, 13f, color, true).apply {
+            background = Ui.shape(c, Ui.alpha(color, 30), 14)
             isClickable = true
-            val h = Ui.dp(c, 12)
+            val h = Ui.dp(c, 14)
             val v = Ui.dp(c, 8)
             setPadding(h, v, h, v)
             setOnClickListener { onClick() }
@@ -411,87 +444,125 @@ class MainActivity : Activity() {
 
         val card = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
-            background = Ui.glass(c, 22, Ui.alpha(sc, 130))
+            background = Ui.glass(c, 24, Ui.alpha(Color.WHITE, 45))
             val p = Ui.dp(c, 16)
             setPadding(p, p, p, p)
-            elevation = Ui.dp(c, 10).toFloat()
+            elevation = Ui.dp(c, 8).toFloat()
             isClickable = true
             setOnClickListener { AlarmEditor.show(this@MainActivity, a) { render() } }
         }
-        card.layoutParams = Ui.lp(c, bottom = 14)
+        card.layoutParams = Ui.lp(c, bottom = 12)
         Ui.attachTilt(card)
 
-        // السطر العلوي: الوقت + شارة الحالة
-        val top = LinearLayout(c).apply {
+        // الصف الأول: أيقونة + (الاسم/الرقم) + (الوقت/الحالة)
+        val row = LinearLayout(c).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        top.addView(
-            Ui.text(c, formatTime(a.hour, a.minute), 30f, if (active) Ui.ACCENT else Ui.MUTED, true).apply {
-                if (active) setShadowLayer(14f, 0f, 0f, Ui.ACCENT)
-            },
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val icon = Ui.text(c, "📞", 20f).apply {
+            gravity = Gravity.CENTER
+            background = Ui.shape(c, Ui.alpha(sc, 45), 16)
+        }
+        row.addView(icon, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)))
+
+        val mid = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        mid.addView(Ui.text(c, a.name, 17f, Ui.TEXT, true))
+        val numTv = Ui.text(c, if (a.autoCall) a.number else "تنبيه", 13f, Ui.MUTED).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.START
+        }
+        mid.addView(numTv, Ui.lp(c, top = 2))
+        row.addView(mid, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = Ui.dp(c, 12)
+            marginEnd = Ui.dp(c, 8)
+        })
+
+        val right = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+        }
+        right.addView(
+            Ui.text(c, formatTime(a.hour, a.minute), 22f, if (active) Ui.ACCENT else Ui.MUTED, true)
         )
-        top.addView(
-            Ui.text(c, "● " + statusLabel(a.status), 13f, sc, true).apply {
-                background = Ui.shape(c, Ui.alpha(sc, 35), 12, Ui.alpha(sc, 120))
-                val h = Ui.dp(c, 12)
-                val v = Ui.dp(c, 5)
-                setPadding(h, v, h, v)
-            }
-        )
-        card.addView(top)
+        right.addView(chip("● " + statusLabel(a.status), sc), Ui.lp(c, w = LinearLayout.LayoutParams.WRAP_CONTENT, top = 4))
+        row.addView(right)
+        card.addView(row)
 
-        card.addView(Ui.text(c, a.name, 17f, Ui.TEXT, true), Ui.lp(c, top = 4))
-
-        // النوع + الرقم
-        val kind = if (a.autoCall) "📞 اتصال تلقائي • " + a.number else "🔔 تنبيه فقط"
-        card.addView(Ui.text(c, kind, 14f, Ui.MUTED), Ui.lp(c, top = 6))
-
-        // التكرار
-        card.addView(Ui.text(c, "🔁 " + repeatSummary(a), 13f, Ui.MUTED), Ui.lp(c, top = 4))
-
-        // القادم / آخر تنفيذ
+        // التكرار والقادم/آخر تنفيذ
+        card.addView(Ui.text(c, "🔁 " + repeatSummary(a), 13f, Ui.MUTED), Ui.lp(c, top = 12))
         if (active) {
             val t = AlarmScheduler.nextTrigger(a)
             if (t != null) card.addView(Ui.text(c, "⏭ القادم: " + formatStamp(t), 13f, Ui.TEXT), Ui.lp(c, top = 4))
         }
         if (a.lastRun > 0L) {
             card.addView(Ui.text(c, "🕘 آخر تنفيذ: " + formatStamp(a.lastRun), 12f, Ui.MUTED), Ui.lp(c, top = 4))
-            if (a.lastResult.isNotEmpty()) {
-                val bad = a.lastResult.startsWith("تعذّر")
-                card.addView(
-                    Ui.text(c, a.lastResult, 12f, if (bad) Ui.DANGER else Ui.SUCCESS, true),
-                    Ui.lp(c, top = 2)
-                )
-            }
-        } else if (a.lastResult.isNotEmpty()) {
-            card.addView(Ui.text(c, a.lastResult, 12f, Ui.DANGER, true), Ui.lp(c, top = 4))
+        }
+        if (a.lastResult.isNotEmpty()) {
+            val bad = a.lastResult.startsWith("تعذّر") || a.lastResult.startsWith("فات")
+            card.addView(
+                Ui.text(c, a.lastResult, 12f, if (bad) Ui.DANGER else Ui.SUCCESS, true),
+                Ui.lp(c, top = 4)
+            )
         }
 
         // أزرار
         val actions = LinearLayout(c).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
+            gravity = Gravity.START
+        }
+        fun add(v: TextView) {
+            actions.addView(v, Ui.lp(c, w = LinearLayout.LayoutParams.WRAP_CONTENT, end = 8))
         }
         if (active) {
-            if (a.autoCall) actions.addView(action("اختبار الآن", Ui.ACCENT) { testCall(a) })
-            actions.addView(action("إلغاء", Ui.WARN) {
+            if (a.autoCall) add(action("اتصل الآن", Ui.ACCENT) { testCall(a) })
+            add(action("إلغاء", Ui.WARN) {
                 AlarmScheduler.cancel(c, a.id)
                 AlarmStore.upsert(c, a.copy(status = AlarmItem.CANCELED))
                 render()
             })
         } else {
-            actions.addView(action("إعادة جدولة", Ui.SUCCESS) {
+            add(action("إعادة جدولة", Ui.SUCCESS) {
                 AlarmStore.reactivate(c, a)
                 Toast.makeText(c, "تمت إعادة الجدولة", Toast.LENGTH_SHORT).show()
                 render()
             })
         }
-        actions.addView(action("تعديل", Ui.PRIMARY) { AlarmEditor.show(this@MainActivity, a) { render() } })
-        actions.addView(action("حذف", Ui.DANGER) { confirmDelete(a) })
-        card.addView(actions, Ui.lp(c, top = 6))
+        add(action("تعديل", Ui.PRIMARY) { AlarmEditor.show(this@MainActivity, a) { render() } })
+        add(action("حذف", Ui.DANGER) { confirmDelete(a) })
+        card.addView(actions, Ui.lp(c, top = 12))
         return card
+    }
+
+    // ------------------------------------------------------------------ جهات الاتصال
+
+    private var onContact: ((String, String) -> Unit)? = null
+
+    /** يفتح جهات الاتصال ويعيد (الرقم، الاسم). لا يحتاج إذن READ_CONTACTS. */
+    fun pickContact(cb: (String, String) -> Unit) {
+        onContact = cb
+        try {
+            startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 401)
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذّر فتح جهات الاتصال", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 401 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            contentResolver.query(
+                uri,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
+                null, null, null
+            )?.use { cur ->
+                if (cur.moveToFirst()) onContact?.invoke(cur.getString(0) ?: "", cur.getString(1) ?: "")
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذّر قراءة الرقم من جهة الاتصال", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ------------------------------------------------------------------ إجراءات
@@ -501,7 +572,7 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 102)
             return
         }
-        Ui.confirm(this, "اختبار الاتصال", "سيتم الاتصال بالرقم ${a.number} الآن. متابعة؟", "اتصل") {
+        Ui.confirm(this, "اتصال الآن", "سيتم الاتصال بالرقم ${PhoneUtil.clean(a.number)} الآن. متابعة؟", "اتصل") {
             val err = CallHelper.place(this, a.number)
             if (err != null) Toast.makeText(this, "تعذّر الاتصال: $err", Toast.LENGTH_LONG).show()
         }
@@ -516,7 +587,7 @@ class MainActivity : Activity() {
     }
 
     private fun accountDialog() {
-        val who = Auth.userName(this) + "\n" + Auth.userEmail(this)
+        val who = Auth.userEmail(this)
         Ui.confirm(this, "الحساب", who + "\n\nهل تريد تسجيل الخروج؟\n(ستبقى مواعيدك محفوظة وتعمل في وقتها)", "تسجيل الخروج") {
             Auth.logout(this)
             startActivity(Intent(this, LoginActivity::class.java))
