@@ -70,7 +70,7 @@ object AlarmEditor {
         )
 
         // ----- الاسم -----
-        val nameEt = Ui.input(c, "الاسم (مثلاً: ماما)").apply { setText(existing?.name ?: "") }
+        val nameEt = Ui.input(c, "الاسم (مثلاً: حمكو)").apply { setText(existing?.name ?: "") }
         root.addView(nameEt, Ui.lp(c, bottom = 14))
 
         // ----- الرقم -----
