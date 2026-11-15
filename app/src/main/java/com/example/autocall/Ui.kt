@@ -1,34 +1,46 @@
 package com.example.autocall
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 
 object Ui {
-    val PRIMARY: Int = Color.parseColor("#1E6BFF")
-    val PRIMARY_DARK: Int = Color.parseColor("#070D18")
-    val NAVY: Int = Color.parseColor("#0B1426")
-    val ACCENT: Int = Color.parseColor("#22C1FF")
-    val ACCENT_DARK: Int = Color.parseColor("#0288D1")
-    val BG: Int = Color.parseColor("#F3F5FA")
-    val TEXT: Int = Color.parseColor("#1F2433")
-    val MUTED: Int = Color.parseColor("#6B7280")
-    val DANGER: Int = Color.parseColor("#D32F2F")
-    val STROKE: Int = Color.parseColor("#D7DBE6")
-    val BADGE_CALL: Int = Color.parseColor("#E3ECFF")
-    val BADGE_ALERT: Int = Color.parseColor("#E1F5FE")
+    // ألوان السمة السينمائية الداكنة
+    val BG: Int = Color.parseColor("#050816")
+    val PRIMARY: Int = Color.parseColor("#3D7BFF")
+    val PRIMARY_DARK: Int = Color.parseColor("#050816")
+    val VIOLET: Int = Color.parseColor("#8A5CFF")
+    val ACCENT: Int = Color.parseColor("#22E1FF")
+    val TEXT: Int = Color.parseColor("#EAF0FF")
+    val MUTED: Int = Color.parseColor("#8FA0C4")
+    val DANGER: Int = Color.parseColor("#FF5C7A")
+    val SUCCESS: Int = Color.parseColor("#2EE6A6")
+    val WARN: Int = Color.parseColor("#FFB74D")
+    val STROKE: Int = Color.parseColor("#3A4A7A")
+    val SURFACE_SOLID: Int = Color.parseColor("#0F1733")
+    val INPUT_BG: Int = Color.parseColor("#141E40")
 
     const val APP_NAME = "Hamko"
 
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
+
+    fun alpha(color: Int, a: Int): Int = Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+
+    fun statusColor(status: Int): Int = when (status) {
+        AlarmItem.COMPLETED -> SUCCESS
+        AlarmItem.CANCELED -> DANGER
+        else -> Color.parseColor("#4DA3FF")
+    }
 
     fun shape(ctx: Context, color: Int, radiusDp: Int, stroke: Int? = null): GradientDrawable =
         GradientDrawable().apply {
@@ -37,12 +49,28 @@ object Ui {
             if (stroke != null) setStroke(dp(ctx, 1), stroke)
         }
 
+    /** بطاقة زجاجية داكنة بتدرّج مائل وحدّ مضيء. */
+    fun glass(ctx: Context, radiusDp: Int, stroke: Int = Color.parseColor("#4D7FA6FF")): GradientDrawable =
+        GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.parseColor("#E01C2858"), Color.parseColor("#E00A1130"))
+        ).apply {
+            cornerRadius = dp(ctx, radiusDp).toFloat()
+            setStroke(dp(ctx, 1), stroke)
+        }
+
+    fun gradient(ctx: Context, c1: Int, c2: Int, radiusDp: Int): GradientDrawable =
+        GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(c1, c2)).apply {
+            cornerRadius = dp(ctx, radiusDp).toFloat()
+        }
+
     fun rtl(v: View) {
         v.layoutDirection = View.LAYOUT_DIRECTION_RTL
     }
 
-    fun setupWindow(a: Activity, color: Int = PRIMARY_DARK) {
-        a.window.statusBarColor = color
+    fun setupWindow(a: Activity) {
+        a.window.statusBarColor = BG
+        a.window.navigationBarColor = BG
     }
 
     /** خط مزخرف لاسم التطبيق (cursive المتوفر في أندرويد). */
@@ -82,10 +110,11 @@ object Ui {
             val v = dp(ctx, 14)
             setPadding(v, v, v, v)
             if (filled) {
-                background = shape(ctx, color, 14)
+                background = gradient(ctx, color, VIOLET, 16)
                 setTextColor(Color.WHITE)
+                elevation = dp(ctx, 6).toFloat()
             } else {
-                background = shape(ctx, Color.WHITE, 14, color)
+                background = shape(ctx, alpha(color, 30), 16, color)
                 setTextColor(color)
             }
         }
@@ -98,8 +127,50 @@ object Ui {
             setTextColor(TEXT)
             setHintTextColor(MUTED)
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            background = shape(ctx, Color.WHITE, 12, STROKE)
+            background = shape(ctx, INPUT_BG, 14, STROKE)
             val v = dp(ctx, 14)
             setPadding(v, v, v, v)
         }
+
+    /** تأثير ثلاثي الأبعاد: تميل البطاقة نحو نقطة اللمس وتصغر قليلاً. */
+    fun attachTilt(v: View) {
+        v.cameraDistance = 12000f * v.resources.displayMetrics.density
+        v.setOnTouchListener { view, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    val w = view.width.coerceAtLeast(1).toFloat()
+                    val h = view.height.coerceAtLeast(1).toFloat()
+                    val nx = (e.x / w - 0.5f).coerceIn(-0.5f, 0.5f)
+                    val ny = (e.y / h - 0.5f).coerceIn(-0.5f, 0.5f)
+                    view.animate().rotationY(nx * 14f).rotationX(-ny * 14f)
+                        .scaleX(0.975f).scaleY(0.975f).setDuration(90).start()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    view.animate().rotationX(0f).rotationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
+            }
+            false
+        }
+    }
+
+    /** نافذة حوار داكنة موحّدة. */
+    fun showDialog(act: Activity, builder: AlertDialog.Builder): AlertDialog {
+        val dlg = builder.create()
+        dlg.show()
+        dlg.window?.setBackgroundDrawable(shape(act, SURFACE_SOLID, 24, STROKE))
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ACCENT)
+        dlg.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(MUTED)
+        return dlg
+    }
+
+    fun builder(act: Activity): AlertDialog.Builder =
+        AlertDialog.Builder(act, android.R.style.Theme_Material_Dialog_Alert)
+
+    fun confirm(act: Activity, title: String, msg: String, yes: String, onYes: () -> Unit) {
+        showDialog(
+            act,
+            builder(act).setTitle(title).setMessage(msg)
+                .setPositiveButton(yes) { _, _ -> onYes() }
+                .setNegativeButton("إلغاء", null)
+        )
+    }
 }

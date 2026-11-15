@@ -3,9 +3,10 @@ package com.example.autocall
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
-import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.text.InputType
 import android.view.Gravity
@@ -16,12 +17,28 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.Calendar
 
-/** نافذة إضافة / تعديل موعد. */
+/** نافذة إضافة / تعديل موعد (تبقى داخل التطبيق وتُحفظ فيه). */
 object AlarmEditor {
+
+    private fun radio(c: Context, label: String): RadioButton =
+        RadioButton(c).apply {
+            text = label
+            id = View.generateViewId()
+            textSize = 16f
+            setTextColor(Ui.TEXT)
+            buttonTintList = ColorStateList.valueOf(Ui.ACCENT)
+        }
+
+    private fun startOfDay(ms: Long): Long =
+        Calendar.getInstance().apply {
+            timeInMillis = ms
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
 
     fun show(act: Activity, existing: AlarmItem?, onSaved: () -> Unit) {
         val c: Context = act
@@ -31,6 +48,15 @@ object AlarmEditor {
         var repeat = existing?.repeat ?: AlarmItem.DAILY
         var autoCall = existing?.autoCall ?: true
         val days: MutableSet<Int> = (existing?.days ?: emptySet()).toMutableSet()
+        var dateMs: Long = existing?.date ?: 0L
+
+        fun ensureDate() {
+            if (dateMs <= 0L) {
+                val probe = AlarmItem(0, "", "", hour, minute, AlarmItem.DAILY, emptySet(), false)
+                dateMs = startOfDay(AlarmScheduler.nextTrigger(probe) ?: System.currentTimeMillis())
+            }
+        }
+        if (repeat == AlarmItem.ONCE) ensureDate()
 
         val root = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
@@ -47,19 +73,11 @@ object AlarmEditor {
         val nameEt = Ui.input(c, "اسم التنبيه أو الاتصال").apply { setText(existing?.name ?: "") }
         root.addView(nameEt, Ui.lp(c, bottom = 14))
 
-        // ----- النوع: اتصال تلقائي / تنبيه فقط -----
+        // ----- النوع -----
         root.addView(Ui.text(c, "نوع الموعد", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
         val modeGroup = RadioGroup(c).apply { orientation = RadioGroup.VERTICAL }
-        val rbCall = RadioButton(c).apply {
-            text = "📞 اتصال تلقائي"
-            id = View.generateViewId()
-            textSize = 16f
-        }
-        val rbAlert = RadioButton(c).apply {
-            text = "🔔 تنبيه فقط"
-            id = View.generateViewId()
-            textSize = 16f
-        }
+        val rbCall = radio(c, "📞 اتصال تلقائي")
+        val rbAlert = radio(c, "🔔 تنبيه فقط")
         modeGroup.addView(rbCall)
         modeGroup.addView(rbAlert)
         modeGroup.check(if (autoCall) rbCall.id else rbAlert.id)
@@ -77,13 +95,13 @@ object AlarmEditor {
             numberEt.visibility = if (autoCall) View.VISIBLE else View.GONE
         }
 
-        // ----- الوقت (صباحاً / مساءً) -----
+        // ----- الوقت -----
         root.addView(Ui.text(c, "الوقت", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
-        val timeBtn = Ui.button(c, formatTime(hour, minute), filled = false)
+        val timeBtn = Ui.button(c, formatTime(hour, minute), filled = false, color = Ui.ACCENT)
         timeBtn.textSize = 22f
         timeBtn.setOnClickListener {
             TimePickerDialog(
-                act,
+                act, android.R.style.Theme_Material_Dialog_Alert,
                 TimePickerDialog.OnTimeSetListener { _, h, m ->
                     hour = h
                     minute = m
@@ -97,9 +115,9 @@ object AlarmEditor {
         // ----- التكرار -----
         root.addView(Ui.text(c, "التكرار", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
         val repeatGroup = RadioGroup(c).apply { orientation = RadioGroup.VERTICAL }
-        val rbOnce = RadioButton(c).apply { text = "مرة واحدة"; id = View.generateViewId(); textSize = 16f }
-        val rbDaily = RadioButton(c).apply { text = "يومياً"; id = View.generateViewId(); textSize = 16f }
-        val rbCustom = RadioButton(c).apply { text = "أيام محددة"; id = View.generateViewId(); textSize = 16f }
+        val rbOnce = radio(c, "مرة واحدة")
+        val rbDaily = radio(c, "يومياً")
+        val rbCustom = radio(c, "أيام محددة")
         repeatGroup.addView(rbOnce)
         repeatGroup.addView(rbDaily)
         repeatGroup.addView(rbCustom)
@@ -112,6 +130,33 @@ object AlarmEditor {
         )
         root.addView(repeatGroup, Ui.lp(c, bottom = 6))
 
+        // ----- التاريخ (لمرة واحدة) -----
+        val dateBtn = Ui.button(
+            c,
+            if (dateMs > 0L) "📅 " + formatDateLong(dateMs) else "📅 اختر التاريخ",
+            filled = false, color = Ui.VIOLET
+        )
+        dateBtn.textSize = 15f
+        dateBtn.visibility = if (repeat == AlarmItem.ONCE) View.VISIBLE else View.GONE
+        dateBtn.setOnClickListener {
+            ensureDate()
+            val cal = Calendar.getInstance().apply { timeInMillis = dateMs }
+            val dlg = DatePickerDialog(
+                act, android.R.style.Theme_Material_Dialog_Alert,
+                DatePickerDialog.OnDateSetListener { _, y, mo, d ->
+                    dateMs = Calendar.getInstance().apply {
+                        set(y, mo, d, 0, 0, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                    dateBtn.text = "📅 " + formatDateLong(dateMs)
+                },
+                cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)
+            )
+            dlg.datePicker.minDate = startOfDay(System.currentTimeMillis())
+            dlg.show()
+        }
+        root.addView(dateBtn, Ui.lp(c, bottom = 8))
+
         // ----- أيام التكرار -----
         val daysRow = LinearLayout(c).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -119,10 +164,10 @@ object AlarmEditor {
         }
         fun paint(chip: TextView, selected: Boolean) {
             if (selected) {
-                chip.background = Ui.shape(c, Ui.PRIMARY, 10)
+                chip.background = Ui.gradient(c, Ui.PRIMARY, Ui.VIOLET, 10)
                 chip.setTextColor(Color.WHITE)
             } else {
-                chip.background = Ui.shape(c, Color.WHITE, 10, Ui.STROKE)
+                chip.background = Ui.shape(c, Ui.INPUT_BG, 10, Ui.STROKE)
                 chip.setTextColor(Ui.TEXT)
             }
         }
@@ -153,17 +198,22 @@ object AlarmEditor {
                 else -> AlarmItem.DAILY
             }
             daysRow.visibility = if (repeat == AlarmItem.CUSTOM) View.VISIBLE else View.GONE
+            dateBtn.visibility = if (repeat == AlarmItem.ONCE) View.VISIBLE else View.GONE
+            if (repeat == AlarmItem.ONCE) {
+                ensureDate()
+                dateBtn.text = "📅 " + formatDateLong(dateMs)
+            }
         }
 
         val scroll = ScrollView(c).apply { addView(root) }
         Ui.rtl(scroll)
 
-        val dlg = AlertDialog.Builder(act, android.R.style.Theme_Material_Light_Dialog_Alert)
-            .setView(scroll)
-            .setPositiveButton("حفظ", null)
-            .setNegativeButton("إلغاء", null)
-            .create()
-        dlg.show()
+        val dlg = Ui.showDialog(
+            act,
+            Ui.builder(act).setView(scroll)
+                .setPositiveButton("حفظ", null)
+                .setNegativeButton("إلغاء", null)
+        )
 
         dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val number = numberEt.text.toString().trim()
@@ -186,21 +236,29 @@ object AlarmEditor {
                 repeat = repeat,
                 days = if (repeat == AlarmItem.CUSTOM) days.toSet() else emptySet(),
                 autoCall = autoCall,
-                enabled = true
+                status = AlarmItem.SCHEDULED,
+                date = if (repeat == AlarmItem.ONCE) dateMs else 0L,
+                owner = existing?.owner?.ifEmpty { Auth.currentKey(c) } ?: Auth.currentKey(c),
+                lastRun = existing?.lastRun ?: 0L,
+                lastResult = existing?.lastResult ?: "",
+                createdAt = existing?.createdAt ?: System.currentTimeMillis()
             )
+
+            val t = AlarmScheduler.nextTrigger(item)
+            if (t == null) {
+                Toast.makeText(c, "اختر وقتاً في المستقبل", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
             AlarmStore.upsert(c, item)
             AlarmScheduler.schedule(c, item)
 
-            if (autoCall && act.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            if (autoCall && !CallHelper.hasPermission(c)) {
                 act.requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 100)
+                Toast.makeText(c, "امنح إذن الاتصال لتعمل المكالمات في موعدها", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(c, "تمت الجدولة • الموعد القادم: " + formatStamp(t), Toast.LENGTH_LONG).show()
             }
-
-            val t = AlarmScheduler.nextTrigger(item)
-            val msg = if (t != null) {
-                "تم الحفظ، الموعد القادم: " +
-                    SimpleDateFormat("EEEE d/M h:mm a", Locale("ar")).format(Date(t))
-            } else "تم الحفظ"
-            Toast.makeText(c, msg, Toast.LENGTH_LONG).show()
 
             dlg.dismiss()
             onSaved()
