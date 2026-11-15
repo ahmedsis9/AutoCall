@@ -24,6 +24,16 @@ class SplashActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("ci", false) && !Auth.isLoggedIn(this)) {
+            Auth.register(this, "CI", "ci@test.com", "123456", "q", "a")
+            val now = System.currentTimeMillis() + 60_000L
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = now }
+            val it = AlarmItem(AlarmStore.nextId(this), "CI", "5551212", cal.get(java.util.Calendar.HOUR_OF_DAY),
+                cal.get(java.util.Calendar.MINUTE), AlarmItem.ONCE, emptySet(), true, AlarmItem.SCHEDULED,
+                now - 30_000L, "ci@test.com")
+            AlarmStore.upsert(this, it)
+            AlarmScheduler.schedule(this, it)
+        }
         Ui.setupWindow(this)
         val c = this
         val d = resources.displayMetrics.density
