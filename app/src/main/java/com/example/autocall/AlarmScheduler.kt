@@ -59,7 +59,16 @@ object AlarmScheduler {
             ctx, 0, Intent(ctx, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        am.setAlarmClock(AlarmManager.AlarmClockInfo(t, show), pi(ctx, a.id))
+        try {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(t, show), pi(ctx, a.id))
+        } catch (e: SecurityException) {
+            // احتياط: لا ينهار التطبيق إن رفض النظام المنبّه الدقيق
+            try {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t, pi(ctx, a.id))
+            } catch (e2: Exception) {
+                // لا شيء
+            }
+        }
     }
 
     fun cancel(ctx: Context, id: Int) {
