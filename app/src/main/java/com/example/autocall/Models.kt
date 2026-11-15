@@ -182,6 +182,12 @@ object AlarmStore {
         saveAll(c, all(c).filter { it.id != id })
     }
 
+    @Synchronized
+    fun setResult(c: Context, id: Int, result: String) {
+        val a = get(c, id) ?: return
+        upsert(c, a.copy(lastResult = result))
+    }
+
     /** المواعيد القديمة بلا مالك تُنسب لأول حساب يدخل. */
     @Synchronized
     fun claimOrphans(c: Context, owner: String) {

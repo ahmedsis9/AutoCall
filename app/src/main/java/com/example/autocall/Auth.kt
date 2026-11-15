@@ -2,7 +2,6 @@ package com.example.autocall
 
 import android.content.Context
 import android.util.Base64
-import android.util.Patterns
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -12,19 +11,12 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
 /**
- * حسابات محلية على الجهاز (لا يوجد خادم). عدة حسابات مسموحة.
- * كلمة المرور وجواب سؤال الأمان يُخزَّنان مشفّرَين (PBKDF2 مع salt) ولا يُحفظان كنص.
+ * حسابات محلية على الجهاز (لا يوجد خادم). الحساب = بريد أو اسم مستخدم + كلمة مرور.
+ * كلمة المرور تُخزَّن مشفّرة (PBKDF2 مع salt) ولا تُحفظ كنص.
  */
 object Auth {
-    const val MIN_PASS = 6
-
-    val QUESTIONS = listOf(
-        "ما اسم أول مدرسة التحقت بها؟",
-        "ما اسم مدينتك المفضلة؟",
-        "ما اسم أقرب صديق لك في الطفولة؟",
-        "ما اسم أول حيوان أليف امتلكته؟",
-        "ما اسم الشارع الذي نشأت فيه؟"
-    )
+    const val MIN_PASS = 4
+    const val MIN_ID = 3
 
     private fun p(c: Context) = c.getSharedPreferences("hamko_accounts", Context.MODE_PRIVATE)
 
@@ -35,9 +27,8 @@ object Auth {
         p(c).edit().putString("accounts", arr.toString()).commit()
     }
 
-    fun normalize(email: String): String = email.trim().lowercase(Locale.ROOT)
-
-    fun isValidEmail(s: String): Boolean = Patterns.EMAIL_ADDRESS.matcher(s.trim()).matches()
+    /** المعرّف (بريد أو اسم مستخدم) بصيغة موحّدة. */
+    fun normalize(id: String): String = id.trim().lowercase(Locale.ROOT)
 
     private fun find(arr: JSONArray, key: String): Int {
         for (i in 0 until arr.length()) if (arr.getJSONObject(i).optString("email") == key) return i
@@ -46,7 +37,7 @@ object Auth {
 
     fun hasAccounts(c: Context): Boolean = load(c).length() > 0
 
-    fun exists(c: Context, email: String): Boolean = find(load(c), normalize(email)) >= 0
+    fun exists(c: Context, id: String): Boolean = find(load(c), normalize(id)) >= 0
 
     fun currentKey(c: Context): String = p(c).getString("current", "") ?: ""
 
@@ -61,7 +52,8 @@ object Auth {
         return if (i >= 0) arr.getJSONObject(i) else null
     }
 
-    fun userName(c: Context): String = currentObj(c)?.optString("name", "") ?: ""
+    /** الاسم المعروض: جزء ما قبل @ إن كان بريداً. */
+    fun userName(c: Context): String = currentKey(c).substringBefore("@")
 
     fun userEmail(c: Context): String = currentObj(c)?.optString("email", "") ?: ""
 
@@ -69,28 +61,23 @@ object Auth {
         p(c).edit().remove("current").commit()
     }
 
-    /** يعيد رسالة خطأ أو null عند النجاح (ويُسجَّل الدخول مباشرة). */
-    fun register(c: Context, name: String, email: String, pass: String, question: String, answer: String): String? {
-        val key = normalize(email)
-        if (name.isBlank()) return "أدخل اسمك"
-        if (!isValidEmail(key)) return "البريد الإلكتروني غير صالح"
+    /** إنشاء حساب: معرّف + كلمة مرور + تأكيدها. يعيد رسالة خطأ أو null عند النجاح. */
+    fun register(c: Context, id: String, pass: String, confirm: String): String? {
+        val key = normalize(id)
+        if (key.length < MIN_ID) return "أدخل بريداً أو اسم مستخدم (٣ أحرف على الأقل)"
+        if (key.any { it.isWhitespace() }) return "اسم المستخدم لا يحتوي مسافات"
         if (pass.length < MIN_PASS) return "كلمة المرور يجب ألا تقل عن $MIN_PASS أحرف"
-        if (question.isBlank()) return "اختر سؤال الأمان"
-        if (answer.trim().length < 2) return "أدخل جواب سؤال الأمان"
+        if (pass != confirm) return "كلمتا المرور غير متطابقتين"
         val arr = load(c)
-        if (find(arr, key) >= 0) return "هذا البريد مسجّل مسبقاً، سجّل الدخول بدلاً من ذلك"
+        if (find(arr, key) >= 0) return "هذا الحساب موجود مسبقاً، سجّل الدخول بدلاً من ذلك"
 
         val salt = newSalt()
-        val aSalt = newSalt()
         arr.put(
             JSONObject()
                 .put("email", key)
-                .put("name", name.trim())
+                .put("name", key.substringBefore("@"))
                 .put("salt", b64(salt))
                 .put("hash", hash(salt, pass))
-                .put("question", question)
-                .put("aSalt", b64(aSalt))
-                .put("aHash", hash(aSalt, normAnswer(answer)))
                 .put("google", false)
         )
         save(c, arr)
@@ -98,11 +85,11 @@ object Auth {
         return null
     }
 
-    fun login(c: Context, email: String, pass: String): String? {
-        val key = normalize(email)
+    fun login(c: Context, id: String, pass: String): String? {
+        val key = normalize(id)
         val arr = load(c)
         val i = find(arr, key)
-        if (i < 0) return "لا يوجد حساب بهذا البريد"
+        if (i < 0) return "لا يوجد حساب بهذا الاسم"
         val o = arr.getJSONObject(i)
         val saltB64 = o.optString("salt", "")
         if (saltB64.isEmpty()) return "هذا الحساب مرتبط بـ Google، استخدم زر Google للدخول"
@@ -119,12 +106,7 @@ object Auth {
         val arr = load(c)
         val i = find(arr, key)
         if (i < 0) {
-            arr.put(
-                JSONObject()
-                    .put("email", key)
-                    .put("name", key.substringBefore("@"))
-                    .put("google", true)
-            )
+            arr.put(JSONObject().put("email", key).put("name", key.substringBefore("@")).put("google", true))
         } else {
             arr.getJSONObject(i).put("google", true)
         }
@@ -132,36 +114,21 @@ object Auth {
         p(c).edit().putString("current", key).commit()
     }
 
-    /** سؤال الأمان لحساب، أو null إن لم يوجد الحساب/السؤال. */
-    fun questionFor(c: Context, email: String): String? {
-        val arr = load(c)
-        val i = find(arr, normalize(email))
-        if (i < 0) return null
-        val q = arr.getJSONObject(i).optString("question", "")
-        return if (q.isEmpty()) null else q
-    }
-
-    /** إعادة تعيين كلمة المرور بجواب سؤال الأمان. null = نجاح. */
-    fun resetPassword(c: Context, email: String, answer: String, newPass: String): String? {
-        val key = normalize(email)
+    /**
+     * «نسيت كلمة المرور»: يحذف بيانات الدخول لهذا الحساب فقط (لا المواعيد)،
+     * فيُنشئه المستخدم من جديد بكلمة مرور جديدة بنفس الاسم وتعود مواعيده.
+     */
+    fun resetAccount(c: Context, id: String): Boolean {
+        val key = normalize(id)
         val arr = load(c)
         val i = find(arr, key)
-        if (i < 0) return "لا يوجد حساب بهذا البريد"
-        val o = arr.getJSONObject(i)
-        val aSalt = o.optString("aSalt", "")
-        if (aSalt.isEmpty()) return "لا يوجد سؤال أمان لهذا الحساب"
-        if (!same(hash(Base64.decode(aSalt, Base64.NO_WRAP), normAnswer(answer)), o.optString("aHash"))) {
-            return "جواب سؤال الأمان غير صحيح"
-        }
-        if (newPass.length < MIN_PASS) return "كلمة المرور يجب ألا تقل عن $MIN_PASS أحرف"
-        val salt = newSalt()
-        o.put("salt", b64(salt)).put("hash", hash(salt, newPass))
-        save(c, arr)
-        p(c).edit().putString("current", key).commit()
-        return null
+        if (i < 0) return false
+        val out = JSONArray()
+        for (j in 0 until arr.length()) if (j != i) out.put(arr.getJSONObject(j))
+        save(c, out)
+        if (currentKey(c) == key) logout(c)
+        return true
     }
-
-    private fun normAnswer(s: String) = s.trim().lowercase(Locale.ROOT)
 
     private fun newSalt() = ByteArray(16).also { SecureRandom().nextBytes(it) }
 

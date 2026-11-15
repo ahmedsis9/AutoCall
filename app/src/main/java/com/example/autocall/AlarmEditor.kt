@@ -1,14 +1,15 @@
 package com.example.autocall
 
 import android.Manifest
-import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -19,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import java.util.Calendar
 
-/** نافذة إضافة / تعديل موعد (تبقى داخل التطبيق وتُحفظ فيه). */
+/** نافذة إضافة / تعديل موعد اتصال (تبقى داخل التطبيق وتُحفظ فيه). */
 object AlarmEditor {
 
     private fun radio(c: Context, label: String): RadioButton =
@@ -40,13 +41,12 @@ object AlarmEditor {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-    fun show(act: Activity, existing: AlarmItem?, onSaved: () -> Unit) {
+    fun show(act: MainActivity, existing: AlarmItem?, onSaved: () -> Unit) {
         val c: Context = act
 
         var hour = existing?.hour ?: 8
         var minute = existing?.minute ?: 0
         var repeat = existing?.repeat ?: AlarmItem.DAILY
-        var autoCall = existing?.autoCall ?: true
         val days: MutableSet<Int> = (existing?.days ?: emptySet()).toMutableSet()
         var dateMs: Long = existing?.date ?: 0L
 
@@ -65,35 +65,50 @@ object AlarmEditor {
         }
 
         root.addView(
-            Ui.text(c, if (existing == null) "موعد جديد" else "تعديل الموعد", 20f, Ui.TEXT, true),
+            Ui.text(c, if (existing == null) "اتصال تلقائي جديد" else "تعديل الموعد", 20f, Ui.TEXT, true),
             Ui.lp(c, bottom = 14)
         )
 
         // ----- الاسم -----
-        val nameEt = Ui.input(c, "اسم التنبيه أو الاتصال").apply { setText(existing?.name ?: "") }
+        val nameEt = Ui.input(c, "الاسم (مثلاً: ماما)").apply { setText(existing?.name ?: "") }
         root.addView(nameEt, Ui.lp(c, bottom = 14))
 
-        // ----- النوع -----
-        root.addView(Ui.text(c, "نوع الموعد", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
-        val modeGroup = RadioGroup(c).apply { orientation = RadioGroup.VERTICAL }
-        val rbCall = radio(c, "📞 اتصال تلقائي")
-        val rbAlert = radio(c, "🔔 تنبيه فقط")
-        modeGroup.addView(rbCall)
-        modeGroup.addView(rbAlert)
-        modeGroup.check(if (autoCall) rbCall.id else rbAlert.id)
-        root.addView(modeGroup, Ui.lp(c, bottom = 8))
-
         // ----- الرقم -----
-        val numberEt = Ui.input(c, "رقم الهاتف", InputType.TYPE_CLASS_PHONE).apply {
+        root.addView(Ui.text(c, "الرقم أو الكود", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
+        val numberEt = Ui.input(c, "07xx xxx xxxx  /  +964...  /  *123#").apply {
+            inputType = InputType.TYPE_CLASS_TEXT
             setText(existing?.number ?: "")
         }
-        root.addView(numberEt, Ui.lp(c, bottom = 14))
-        numberEt.visibility = if (autoCall) View.VISIBLE else View.GONE
+        root.addView(numberEt, Ui.lp(c, bottom = 6))
 
-        modeGroup.setOnCheckedChangeListener { _, checkedId ->
-            autoCall = checkedId == rbCall.id
-            numberEt.visibility = if (autoCall) View.VISIBLE else View.GONE
+        val preview = Ui.text(c, "", 12f, Ui.ACCENT)
+        root.addView(preview, Ui.lp(c, bottom = 6))
+        fun refreshPreview() {
+            val raw = numberEt.text.toString()
+            val n = PhoneUtil.clean(raw)
+            preview.text = when {
+                raw.isBlank() -> "الرموز المدعومة: الأرقام + * # , ;  (أي رمز آخر يُحذف تلقائياً)"
+                !PhoneUtil.isDialable(n) -> "⚠️ لا يوجد رقم صالح"
+                n != raw.trim() -> "سيتم طلب: $n"
+                else -> "✓ سيتم طلب: $n"
+            }
         }
+        refreshPreview()
+        numberEt.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, cnt: Int, aft: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, bef: Int, cnt: Int) {}
+            override fun afterTextChanged(s: Editable?) = refreshPreview()
+        })
+
+        val pick = Ui.button(c, "👤 اختيار من جهات الاتصال", filled = false, color = Ui.ACCENT)
+        pick.textSize = 14f
+        pick.setOnClickListener {
+            act.pickContact { number, name ->
+                numberEt.setText(number)
+                if (nameEt.text.toString().isBlank() && name.isNotBlank()) nameEt.setText(name)
+            }
+        }
+        root.addView(pick, Ui.lp(c, bottom = 14))
 
         // ----- الوقت -----
         root.addView(Ui.text(c, "الوقت", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
@@ -216,16 +231,16 @@ object AlarmEditor {
         )
 
         dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val number = numberEt.text.toString().trim()
-            if (autoCall && number.isEmpty()) {
-                Toast.makeText(c, "أدخل رقم الهاتف", Toast.LENGTH_SHORT).show()
+            val number = PhoneUtil.clean(numberEt.text.toString())
+            if (!PhoneUtil.isDialable(number)) {
+                Toast.makeText(c, "أدخل رقماً صالحاً أو اختره من جهات الاتصال", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             if (repeat == AlarmItem.CUSTOM && days.isEmpty()) {
                 Toast.makeText(c, "اختر يوماً واحداً على الأقل", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val name = nameEt.text.toString().trim().ifEmpty { if (autoCall) "اتصال تلقائي" else "تنبيه" }
+            val name = nameEt.text.toString().trim().ifEmpty { "اتصال تلقائي" }
 
             val item = AlarmItem(
                 id = existing?.id ?: AlarmStore.nextId(c),
@@ -235,7 +250,7 @@ object AlarmEditor {
                 minute = minute,
                 repeat = repeat,
                 days = if (repeat == AlarmItem.CUSTOM) days.toSet() else emptySet(),
-                autoCall = autoCall,
+                autoCall = true,
                 status = AlarmItem.SCHEDULED,
                 date = if (repeat == AlarmItem.ONCE) dateMs else 0L,
                 owner = existing?.owner?.ifEmpty { Auth.currentKey(c) } ?: Auth.currentKey(c),
@@ -253,11 +268,11 @@ object AlarmEditor {
             AlarmStore.upsert(c, item)
             AlarmScheduler.schedule(c, item)
 
-            if (autoCall && !CallHelper.hasPermission(c)) {
+            if (!CallHelper.hasPermission(c)) {
                 act.requestPermissions(arrayOf(Manifest.permission.CALL_PHONE), 100)
                 Toast.makeText(c, "امنح إذن الاتصال لتعمل المكالمات في موعدها", Toast.LENGTH_LONG).show()
             } else {
-                Toast.makeText(c, "تمت الجدولة • الموعد القادم: " + formatStamp(t), Toast.LENGTH_LONG).show()
+                Toast.makeText(c, "تمت الجدولة • الاتصال القادم: " + formatStamp(t), Toast.LENGTH_LONG).show()
             }
 
             dlg.dismiss()

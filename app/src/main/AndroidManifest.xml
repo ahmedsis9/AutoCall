@@ -8,6 +8,9 @@
     <!-- إلزامي في أندرويد 13/14 لجدولة المواعيد بدقة (يُمنح تلقائياً لتطبيقات المنبّهات) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- يسمح بفتح شاشة الاتصال من الخلفية فوق شاشة القفل -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 

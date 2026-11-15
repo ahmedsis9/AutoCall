@@ -5,18 +5,25 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 
-/** يعمل عند حلول موعد المؤقت، حتى والشاشة مقفلة. */
+/** يعمل عند حلول موعد الاتصال، حتى والشاشة مقفلة. */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val id = intent.getIntExtra("id", -1)
+        val app = ctx.applicationContext
+        val pending = goAsync()
         val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "hamko:alarm")
-        wl.acquire(30_000L)
-        try {
-            handle(ctx, id)
-        } finally {
-            if (wl.isHeld) wl.release()
-        }
+        wl.acquire(40_000L)
+        Thread {
+            try {
+                handle(app, id)
+            } catch (e: Exception) {
+                AlarmStore.setResult(app, id, "تعذّر الاتصال: ${e.message ?: "خطأ"}")
+            } finally {
+                if (wl.isHeld) wl.release()
+                pending.finish()
+            }
+        }.start()
     }
 
     private fun handle(ctx: Context, id: Int) {
@@ -33,21 +40,57 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.schedule(ctx, cur, now + 60_000L)
         }
 
-        val result: String
-        if (a.autoCall) {
-            val err = CallHelper.place(ctx, a.number)
-            if (err == null) {
-                result = "تم الاتصال بـ ${a.number}"
-                Notifier.show(ctx, a, "جارٍ الاتصال بـ ${a.number}")
-            } else {
-                result = "تعذّر الاتصال: $err"
-                Notifier.showCallFallback(ctx, a, "تعذّر الاتصال تلقائياً ($err)")
-            }
-        } else {
-            result = "تم التنبيه"
+        if (!a.autoCall) {
+            AlarmStore.upsert(ctx, cur.copy(lastResult = "تم التنبيه"))
             Notifier.show(ctx, a, "حان موعد التنبيه")
+            return
         }
-        AlarmStore.upsert(ctx, cur.copy(lastResult = result))
+
+        val n = PhoneUtil.clean(a.number)
+        // نحفظ الحالة قبل الاتصال حتى لا تُستبدل نتيجة الشاشة الأمامية
+        AlarmStore.upsert(ctx, cur.copy(lastResult = "جارٍ الاتصال بـ $n"))
+        val result = dial(ctx, a, n)
+        if (result != null) AlarmStore.setResult(ctx, a.id, result)
+    }
+
+    /** يعيد نص النتيجة، أو null إن تولّت CallActivity كتابة النتيجة بنفسها. */
+    private fun dial(ctx: Context, a: AlarmItem, n: String): String? {
+        if (!CallHelper.hasPermission(ctx)) {
+            Notifier.showCallFallback(ctx, a, "إذن الاتصال غير ممنوح")
+            return "تعذّر الاتصال: إذن الاتصال غير ممنوح"
+        }
+
+        // 1) الأوثق: فتح شاشة الاتصال مباشرة (تعمل فوق القفل) إن مُنح العرض فوق التطبيقات
+        if (CallHelper.canOverlay(ctx)) {
+            try {
+                ctx.startActivity(
+                    Intent(ctx, CallActivity::class.java)
+                        .putExtra("id", a.id)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                )
+                return null
+            } catch (e: Exception) {
+                // ننتقل للطريقة التالية
+            }
+        }
+
+        // 2) الاتصال المباشر من الخلفية ثم التحقق أنه بدأ فعلاً
+        val err = CallHelper.place(ctx, n)
+        if (err != null) {
+            Notifier.showCallFallback(ctx, a, err)
+            return "تعذّر الاتصال: $err"
+        }
+        if (PhoneUtil.isCode(n)) return "تم إرسال الكود $n"
+        try {
+            Thread.sleep(4000)
+        } catch (e: InterruptedException) {
+            // لا شيء
+        }
+        if (!CallHelper.inCall(ctx)) {
+            Notifier.showCallFallback(ctx, a, "لم تبدأ المكالمة")
+            return "تعذّر الاتصال تلقائياً، اضغط الإشعار للاتصال (فعّل «العرض فوق التطبيقات»)"
+        }
+        return "تم الاتصال بـ $n"
     }
 }
 
