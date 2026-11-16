@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** يعمل عند حلول موعد الاتصال، حتى والشاشة مقفلة. */
 class AlarmReceiver : BroadcastReceiver() {
@@ -53,12 +55,33 @@ class AlarmReceiver : BroadcastReceiver() {
         if (result != null) AlarmStore.setResult(ctx, a.id, result)
     }
 
+    private fun dialCode(ctx: Context, n: String): String {
+        val latch = CountDownLatch(1)
+        var ok = false
+        var text = ""
+        CallHelper.sendCode(ctx, n) { o, t ->
+            ok = o
+            text = t
+            latch.countDown()
+        }
+        latch.await(10, TimeUnit.SECONDS)
+        if (latch.count > 0L) return "تم إرسال الكود $n (بانتظار ردّ الشبكة)"
+        if (ok) return "تم تنفيذ الكود $n" + (if (text.isNotBlank()) ": $text" else "")
+        // الهاتف رفض واجهة الأكواد: نجرّب الاتصال العادي
+        val err = CallHelper.place(ctx, n)
+        return if (err == null) "تم إرسال الكود $n عبر الاتصال (قد يتطلب تأكيداً في تطبيق الاتصال)"
+        else "تعذّر تنفيذ الكود: $text / $err"
+    }
+
     /** يعيد نص النتيجة، أو null إن تولّت CallActivity كتابة النتيجة بنفسها. */
     private fun dial(ctx: Context, a: AlarmItem, n: String): String? {
         if (!CallHelper.hasPermission(ctx)) {
             Notifier.showCallFallback(ctx, a, "إذن الاتصال غير ممنوح")
             return "تعذّر الاتصال: إذن الاتصال غير ممنوح"
         }
+
+        // الأكواد (* و #) تُرسل عبر واجهة الأكواد ويُقرأ ردّ الشبكة
+        if (PhoneUtil.isCode(n)) return dialCode(ctx, n)
 
         // 1) الأوثق: فتح شاشة الاتصال مباشرة (تعمل فوق القفل) إن مُنح العرض فوق التطبيقات
         if (CallHelper.canOverlay(ctx)) {

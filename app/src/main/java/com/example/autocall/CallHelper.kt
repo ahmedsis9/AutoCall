@@ -8,6 +8,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.telephony.TelephonyManager
 import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.WindowManager
@@ -65,6 +68,32 @@ object CallHelper {
         }
     }
 
+    /**
+     * يرسل كود USSD/خدمة (مثل *123# أو ##002#) عبر واجهة الأكواد الرسمية ويعيد ردّ الشبكة.
+     * أوثق من أمر الاتصال العادي الذي تكتفي بعض الهواتف بفتح لوحة الأرقام عنده دون تنفيذه.
+     * done(true, الرد) عند النجاح، و done(false, السبب) عند الفشل. يُستدعى مرة واحدة.
+     */
+    fun sendCode(ctx: Context, code: String, done: (Boolean, String) -> Unit) {
+        if (!hasPermission(ctx)) {
+            done(false, "إذن الاتصال غير ممنوح")
+            return
+        }
+        try {
+            val tm = ctx.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            tm.sendUssdRequest(code, object : TelephonyManager.UssdResponseCallback() {
+                override fun onReceiveUssdResponse(telephonyManager: TelephonyManager, request: String, response: CharSequence) {
+                    done(true, response.toString())
+                }
+
+                override fun onReceiveUssdResponseFailed(telephonyManager: TelephonyManager, request: String, failureCode: Int) {
+                    done(false, "رفضه الهاتف/الشبكة (رمز $failureCode)")
+                }
+            }, Handler(Looper.getMainLooper()))
+        } catch (e: Exception) {
+            done(false, e.message ?: "خطأ غير معروف")
+        }
+    }
+
     /** هل توجد مكالمة جارية/قيد الطلب؟ (إن لم نملك إذن القراءة نفترض النجاح). */
     fun inCall(ctx: Context): Boolean {
         if (ctx.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return true
@@ -112,6 +141,31 @@ class CallActivity : Activity() {
 
     private fun go(a: AlarmItem) {
         val n = PhoneUtil.clean(a.number)
+        if (PhoneUtil.isCode(n)) {
+            var finished = false
+            fun end() {
+                if (!finished) {
+                    finished = true
+                    getSystemService(android.app.NotificationManager::class.java).cancel(a.id)
+                    finish()
+                }
+            }
+            CallHelper.sendCode(this, n) { ok, text ->
+                if (ok) {
+                    AlarmStore.setResult(this, a.id, "تم تنفيذ الكود $n" + (if (text.isNotBlank()) ": $text" else ""))
+                } else {
+                    val err = CallHelper.place(this, n)
+                    AlarmStore.setResult(
+                        this, a.id,
+                        if (err == null) "تم إرسال الكود $n عبر الاتصال (قد يتطلب تأكيداً في تطبيق الاتصال)"
+                        else "تعذّر تنفيذ الكود: $text / $err"
+                    )
+                }
+                end()
+            }
+            Handler(Looper.getMainLooper()).postDelayed({ end() }, 12_000L)
+            return
+        }
         val err = CallHelper.place(this, n)
         if (err != null) {
             Toast.makeText(this, "تعذّر الاتصال: $err", Toast.LENGTH_LONG).show()

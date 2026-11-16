@@ -573,8 +573,20 @@ class MainActivity : Activity() {
             return
         }
         Ui.confirm(this, "اتصال الآن", "سيتم الاتصال بالرقم ${PhoneUtil.clean(a.number)} الآن. متابعة؟", "اتصل") {
-            val err = CallHelper.place(this, a.number)
-            if (err != null) Toast.makeText(this, "تعذّر الاتصال: $err", Toast.LENGTH_LONG).show()
+            val n = PhoneUtil.clean(a.number)
+            if (PhoneUtil.isCode(n)) {
+                CallHelper.sendCode(this, n) { ok, text ->
+                    if (ok) {
+                        Toast.makeText(this, if (text.isBlank()) "تم تنفيذ الكود" else text, Toast.LENGTH_LONG).show()
+                    } else {
+                        val err = CallHelper.place(this, n)
+                        if (err != null) Toast.makeText(this, "تعذّر تنفيذ الكود: $text", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } else {
+                val err = CallHelper.place(this, a.number)
+                if (err != null) Toast.makeText(this, "تعذّر الاتصال: $err", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
