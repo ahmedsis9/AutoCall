@@ -60,13 +60,12 @@ class LoginActivity : Activity() {
             setImageResource(R.drawable.logo)
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        col.addView(logo, Ui.lp(c, w = Ui.dp(c, 110), h = Ui.dp(c, 110)))
+        col.addView(logo, Ui.lp(c, w = Ui.dp(c, 92), h = Ui.dp(c, 92)))
 
         col.addView(
-            Ui.text(c, Ui.APP_NAME, 30f, Color.WHITE, true).apply {
+            Ui.text(c, Ui.APP_NAME, 26f, Color.WHITE, true).apply {
                 typeface = Ui.fancyFont()
                 gravity = Gravity.CENTER
-                setShadowLayer(22f, 0f, 0f, Ui.PRIMARY)
             },
             Ui.lp(c, bottom = 14)
         )
@@ -76,7 +75,6 @@ class LoginActivity : Activity() {
             background = Ui.glass(c, 26)
             val p = Ui.dp(c, 22)
             setPadding(p, p, p, p)
-            elevation = Ui.dp(c, 12).toFloat()
         }
         Ui.attachTilt(card)
         col.addView(card, Ui.lp(c))

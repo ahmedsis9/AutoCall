@@ -50,7 +50,7 @@ class SplashActivity : Activity() {
             background = GradientDrawable().apply {
                 gradientType = GradientDrawable.RADIAL_GRADIENT
                 gradientRadius = glowSize / 2f
-                colors = intArrayOf(Color.parseColor("#883D7BFF"), Color.parseColor("#2222E1FF"), Color.TRANSPARENT)
+                colors = intArrayOf(Color.parseColor("#555B6BDB"), Color.parseColor("#224C9AA8"), Color.TRANSPARENT)
                 shape = GradientDrawable.OVAL
             }
         }
@@ -66,10 +66,9 @@ class SplashActivity : Activity() {
         stage.addView(logo, FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER))
         col.addView(stage, Ui.lp(c, w = glowSize, h = glowSize))
 
-        val title = Ui.text(c, Ui.APP_NAME, 36f, Color.WHITE, true).apply {
+        val title = Ui.text(c, Ui.APP_NAME, 30f, Color.WHITE, true).apply {
             typeface = Ui.fancyFont()
             gravity = Gravity.CENTER
-            setShadowLayer(26f, 0f, 0f, Ui.PRIMARY)
             alpha = 0f
             letterSpacing = 0.25f
         }

@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.hardware.Sensor
@@ -15,38 +16,52 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import android.view.View
 import android.view.animation.LinearInterpolator
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * خلفية التطبيق (شاشة البداية وما بعد فتح التطبيق): أزرق كهربائي عميق بألوان الشعار،
- * شفق متدرّج (أزرق/سماوي/أخضر/ذهبي)، أشعة ضوء قطرية تتمايل، وفقاعات ضوئية تصعد ببطء.
- * تتفاعل مع ميلان الهاتف (باراللاكس).
+ * خلفية التطبيق: تدرّج نيلي هادئ، بقع لونية ناعمة، حلقات متحدة المركز، شبكات نقاط،
+ * أشكال هندسية عائمة (مربعات مستديرة ودوائر) وموجتان في الأسفل. كلها بألوان خافتة غير لامعة
+ * وتتحرك ببطء مع تفاعل خفيف لميلان الهاتف.
  */
 class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
 
-    private class Orb(val x: Float, val speed: Float, val phase: Float, val size: Float, val kind: Int)
+    private class Shape(
+        val x: Float, val y: Float, val size: Float, val rot: Float,
+        val speed: Float, val kind: Int, val color: Int, val depth: Float
+    )
 
-    /** شدّة الأشعة والفقاعات (تُخفَّف في الشاشات المزدحمة). */
+    /** شدّة الزخارف (1 = كاملة). */
     var intensity: Float = 1f
 
-    private val rnd = Random(11)
-    private val orbs = Array(46) {
-        Orb(rnd.nextFloat(), 0.012f + rnd.nextFloat() * 0.03f, rnd.nextFloat(), 0.25f + rnd.nextFloat() * 0.75f, rnd.nextInt(3))
+    private val indigo = Color.parseColor("#6B7BDB")
+    private val teal = Color.parseColor("#4C9AA8")
+    private val rose = Color.parseColor("#C8808C")
+    private val sand = Color.parseColor("#CDAE78")
+    private val lav = Color.parseColor("#9A8FD9")
+    private val palette = intArrayOf(indigo, teal, rose, sand, lav)
+
+    private val rnd = Random(23)
+    private val shapes = Array(12) {
+        Shape(
+            rnd.nextFloat(), rnd.nextFloat() * 0.85f, 14f + rnd.nextFloat() * 26f, rnd.nextFloat() * 6.28f,
+            0.15f + rnd.nextFloat() * 0.35f, rnd.nextInt(3), palette[rnd.nextInt(palette.size)], 0.3f + rnd.nextFloat()
+        )
     }
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val path = Path()
     private val d = ctx.resources.displayMetrics.density
 
     private var base: Shader? = null
     private var vignette: Shader? = null
-    private var blue: Shader? = null
-    private var cyan: Shader? = null
-    private var green: Shader? = null
-    private var gold: Shader? = null
-    private var ray: Shader? = null
+    private var blobIndigo: Shader? = null
+    private var blobTeal: Shader? = null
+    private var blobRose: Shader? = null
+    private var blobSand: Shader? = null
     private var blobR = 1f
-    private var rayLen = 1f
 
     private var tx = 0f
     private var ty = 0f
@@ -55,16 +70,14 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
     private var time = 0f
     private val t0 = SystemClock.uptimeMillis()
 
-    private val orbColors = intArrayOf(Color.parseColor("#5AB4FF"), Color.parseColor("#22E1FF"), Color.parseColor("#FFFFFF"))
-
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 1000
         repeatCount = ValueAnimator.INFINITE
         interpolator = LinearInterpolator()
         addUpdateListener {
             time = (SystemClock.uptimeMillis() - t0) / 1000f
-            sx += (tx - sx) * 0.08f
-            sy += (ty - sy) * 0.08f
+            sx += (tx - sx) * 0.06f
+            sy += (ty - sy) * 0.06f
             invalidate()
         }
     }
@@ -75,20 +88,18 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
         val hf = max(h, 1).toFloat()
         base = LinearGradient(
             0f, 0f, 0f, hf,
-            intArrayOf(Color.parseColor("#040B26"), Color.parseColor("#0A2C94"), Color.parseColor("#061A66"), Color.parseColor("#030B2E")),
-            floatArrayOf(0f, 0.38f, 0.72f, 1f), Shader.TileMode.CLAMP
+            intArrayOf(Color.parseColor("#0D1322"), Color.parseColor("#18223E"), Color.parseColor("#0E1525")),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
         )
-        blobR = max(wf, hf) * 0.6f
-        blue = RadialGradient(0f, 0f, blobR, Color.parseColor("#802F7BFF"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        cyan = RadialGradient(0f, 0f, blobR, Color.parseColor("#5522E1FF"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        green = RadialGradient(0f, 0f, blobR * 0.8f, Color.parseColor("#3C2BFF6A"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        gold = RadialGradient(0f, 0f, blobR * 0.55f, Color.parseColor("#33FFC94A"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        rayLen = max(wf, hf) * 1.5f
-        ray = LinearGradient(0f, 0f, rayLen, 0f, Color.parseColor("#40BFE3FF"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        blobR = max(wf, hf) * 0.55f
+        blobIndigo = RadialGradient(0f, 0f, blobR, Color.parseColor("#4D5D6BDB"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        blobTeal = RadialGradient(0f, 0f, blobR * 0.9f, Color.parseColor("#3A4C9AA8"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        blobRose = RadialGradient(0f, 0f, blobR * 0.75f, Color.parseColor("#26C8808C"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        blobSand = RadialGradient(0f, 0f, blobR * 0.6f, Color.parseColor("#1ECDAE78"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
         vignette = RadialGradient(
-            wf / 2, hf / 2, max(wf, hf) * 0.8f,
-            intArrayOf(Color.TRANSPARENT, Color.parseColor("#99000000")),
-            floatArrayOf(0.55f, 1f), Shader.TileMode.CLAMP
+            wf / 2, hf / 2, max(wf, hf) * 0.85f,
+            intArrayOf(Color.TRANSPARENT, Color.parseColor("#66000000")),
+            floatArrayOf(0.6f, 1f), Shader.TileMode.CLAMP
         )
     }
 
@@ -101,37 +112,57 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
         paint.shader = base
         canvas.drawRect(0f, 0f, w, h, paint)
 
-        // الشفق: كتل ضوئية كبيرة تنجرف ببطء
-        blob(canvas, blue, w * (0.78f + 0.07f * sin(time * 0.16f)) + sx * 25f * d, h * (0.18f + 0.05f * sin(time * 0.12f)))
-        blob(canvas, cyan, w * (0.15f + 0.08f * sin(time * 0.11f + 1f)) + sx * 15f * d, h * (0.42f + 0.06f * sin(time * 0.09f)))
-        blob(canvas, green, w * (0.85f + 0.05f * sin(time * 0.13f + 2f)) - sx * 20f * d, h * (0.7f + 0.05f * sin(time * 0.1f)))
-        blob(canvas, gold, w * (0.3f + 0.06f * sin(time * 0.1f + 3f)), h * (0.92f + 0.03f * sin(time * 0.14f)))
+        // بقع لونية ناعمة تنجرف ببطء
+        blob(canvas, blobIndigo, w * (0.85f + 0.06f * sin(time * 0.12f)) + sx * 20f * d, h * (0.15f + 0.05f * sin(time * 0.1f)))
+        blob(canvas, blobTeal, w * (0.1f + 0.07f * sin(time * 0.09f + 1f)) + sx * 14f * d, h * (0.5f + 0.06f * sin(time * 0.08f)))
+        blob(canvas, blobRose, w * (0.9f + 0.05f * sin(time * 0.1f + 2f)) - sx * 16f * d, h * (0.72f + 0.05f * sin(time * 0.11f)))
+        blob(canvas, blobSand, w * (0.25f + 0.06f * sin(time * 0.07f + 3f)), h * (0.95f + 0.02f * sin(time * 0.13f)))
 
-        // أشعة ضوء قطرية من الزاوية العلوية تتمايل
-        paint.shader = ray
-        for (i in 0 until 4) {
-            val ang = 118f + i * 11f + 5f * sin(time * 0.25f + i)
-            paint.alpha = ((70 - i * 12) * intensity).toInt().coerceIn(0, 255)
+        // حلقات متحدة المركز في زاويتين
+        rings(canvas, w * 0.95f + sx * 10f * d, h * 0.09f + sy * 8f * d, 70f * d, 4)
+        rings(canvas, w * 0.04f + sx * 8f * d, h * 0.9f + sy * 8f * d, 60f * d, 3)
+
+        // شبكتا نقاط
+        dots(canvas, w * 0.07f, h * 0.13f, 6, 5)
+        dots(canvas, w * 0.97f - 5 * 16f * d, h * 0.62f, 6, 5)
+
+        // أشكال هندسية عائمة
+        for (s in shapes) {
+            val px = s.x * w + sx * s.depth * 24f * d + 12f * d * sin(time * s.speed + s.rot)
+            val py = s.y * h + 14f * d * cos(time * s.speed * 0.8f + s.rot) + sy * s.depth * 14f * d
+            val r = s.size * d
             canvas.save()
-            canvas.translate(w * 1.02f + sx * 12f * d, -h * 0.04f)
-            canvas.rotate(ang)
-            canvas.drawRect(0f, -(26f + i * 14f) * d, rayLen, (26f + i * 14f) * d, paint)
+            canvas.translate(px, py)
+            canvas.rotate(time * s.speed * 25f + s.rot * 57f)
+            paint.color = s.color
+            when (s.kind) {
+                0 -> {
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = 1.5f * d
+                    paint.alpha = (50f * intensity).toInt().coerceIn(0, 255)
+                    canvas.drawRoundRect(-r, -r, r, r, r * 0.3f, r * 0.3f, paint)
+                }
+                1 -> {
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = 1.5f * d
+                    paint.alpha = (44f * intensity).toInt().coerceIn(0, 255)
+                    canvas.drawCircle(0f, 0f, r * 0.8f, paint)
+                }
+                else -> {
+                    paint.style = Paint.Style.FILL
+                    paint.alpha = (24f * intensity).toInt().coerceIn(0, 255)
+                    canvas.drawRoundRect(-r, -r, r, r, r * 0.35f, r * 0.35f, paint)
+                }
+            }
             canvas.restore()
         }
-        paint.shader = null
 
-        // فقاعات ضوئية تصعد
-        for (o in orbs) {
-            val py = h - (((o.phase + time * o.speed) % 1f) * (h * 1.1f)) + sy * 18f * d * o.size
-            val px = o.x * w + 14f * d * sin(time * 0.6f + o.phase * 6.28f) + sx * 28f * d * o.size
-            val life = ((py / h).coerceIn(0f, 1f))
-            val a = (110f * o.size * (0.35f + 0.65f * sin(life * 3.14f)) * intensity).toInt().coerceIn(0, 255)
-            paint.color = orbColors[o.kind]
-            paint.alpha = a
-            canvas.drawCircle(px, py, (1.5f + o.size * 5f) * d, paint)
-        }
+        // موجتان في الأسفل
+        wave(canvas, w, h, h * 0.89f + sy * 10f * d, 14f * d, 1.3f, 0.5f, 0f, teal, (34f * intensity).toInt())
+        wave(canvas, w, h, h * 0.935f + sy * 8f * d, 10f * d, 1.9f, -0.4f, 1f, indigo, (40f * intensity).toInt())
 
-        // تعتيم الأطراف
+        // تعتيم خفيف للأطراف
+        paint.style = Paint.Style.FILL
         paint.shader = vignette
         paint.alpha = 255
         canvas.drawRect(0f, 0f, w, h, paint)
@@ -139,6 +170,7 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
     }
 
     private fun blob(canvas: Canvas, shader: Shader?, cx: Float, cy: Float) {
+        paint.style = Paint.Style.FILL
         paint.shader = shader
         paint.alpha = 255
         canvas.save()
@@ -146,6 +178,50 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
         canvas.drawCircle(0f, 0f, blobR, paint)
         canvas.restore()
         paint.shader = null
+    }
+
+    private fun rings(canvas: Canvas, cx: Float, cy: Float, baseR: Float, n: Int) {
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.2f * d
+        paint.color = lav
+        for (i in 0 until n) {
+            val r = baseR * (1f + i * 0.5f) + 4f * d * sin(time * 0.5f + i)
+            paint.alpha = ((36 - i * 7) * intensity).toInt().coerceIn(0, 255)
+            canvas.drawCircle(cx, cy, r, paint)
+        }
+    }
+
+    private fun dots(canvas: Canvas, x0: Float, y0: Float, cols: Int, rows: Int) {
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.color = Color.WHITE
+        paint.alpha = (34f * intensity).toInt().coerceIn(0, 255)
+        val gap = 16f * d
+        for (i in 0 until cols) for (j in 0 until rows) {
+            canvas.drawCircle(x0 + i * gap + sx * 6f * d, y0 + j * gap, 1.6f * d, paint)
+        }
+    }
+
+    private fun wave(
+        canvas: Canvas, w: Float, h: Float, baseY: Float, amp: Float,
+        freq: Float, speed: Float, phase: Float, color: Int, alpha: Int
+    ) {
+        path.reset()
+        path.moveTo(0f, h)
+        val step = 12f * d
+        var x = 0f
+        while (x <= w + step) {
+            path.lineTo(x, baseY + amp * sin(x / w * 6.2832f * freq + time * speed + phase))
+            x += step
+        }
+        path.lineTo(w + step, h)
+        path.close()
+        paint.shader = null
+        paint.style = Paint.Style.FILL
+        paint.color = color
+        paint.alpha = alpha.coerceIn(0, 255)
+        canvas.drawPath(path, paint)
     }
 
     override fun onAttachedToWindow() {
@@ -156,7 +232,7 @@ class CinematicBackground(ctx: Context) : View(ctx), SensorEventListener {
             val s = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             if (s != null) sm.registerListener(this, s, SensorManager.SENSOR_DELAY_UI)
         } catch (e: Exception) {
-            // بدون مستشعر: تبقى الخلفية متحركة دون باراللاكس
+            // بدون مستشعر: تبقى الخلفية متحركة دون تفاعل الميلان
         }
     }
 

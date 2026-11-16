@@ -3,9 +3,12 @@ package com.example.autocall
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.text.InputType
 import android.view.Gravity
 import android.view.MotionEvent
@@ -15,20 +18,20 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 object Ui {
-    // ألوان السمة السينمائية الداكنة
-    val BG: Int = Color.parseColor("#050816")
-    val PRIMARY: Int = Color.parseColor("#3D7BFF")
-    val PRIMARY_DARK: Int = Color.parseColor("#050816")
-    val VIOLET: Int = Color.parseColor("#8A5CFF")
-    val ACCENT: Int = Color.parseColor("#22E1FF")
-    val TEXT: Int = Color.parseColor("#EAF0FF")
-    val MUTED: Int = Color.parseColor("#8FA0C4")
-    val DANGER: Int = Color.parseColor("#FF5C7A")
-    val SUCCESS: Int = Color.parseColor("#2EE6A6")
-    val WARN: Int = Color.parseColor("#FFB74D")
-    val STROKE: Int = Color.parseColor("#3A4A7A")
-    val SURFACE_SOLID: Int = Color.parseColor("#0F1733")
-    val INPUT_BG: Int = Color.parseColor("#141E40")
+    // لوحة ألوان هادئة وغير لامعة: نيلي رمادي + لمسات سماوية/وردية/رملية خافتة
+    val BG: Int = Color.parseColor("#0E1424")
+    val PRIMARY: Int = Color.parseColor("#6B7BDB")      // نيلي ناعم
+    val PRIMARY_DARK: Int = Color.parseColor("#0E1424")
+    val VIOLET: Int = Color.parseColor("#4C9AA8")       // فيروزي هادئ (نهاية التدرّج)
+    val ACCENT: Int = Color.parseColor("#86CDC4")       // نعناعي فاتح
+    val TEXT: Int = Color.parseColor("#E4E8F3")
+    val MUTED: Int = Color.parseColor("#8B95B0")
+    val DANGER: Int = Color.parseColor("#D8707D")
+    val SUCCESS: Int = Color.parseColor("#6DBE9A")
+    val WARN: Int = Color.parseColor("#D8A762")
+    val STROKE: Int = Color.parseColor("#2A3552")
+    val SURFACE_SOLID: Int = Color.parseColor("#18203A")
+    val INPUT_BG: Int = Color.parseColor("#1A2340")
 
     const val APP_NAME = "Auto Caller"
 
@@ -39,7 +42,7 @@ object Ui {
     fun statusColor(status: Int): Int = when (status) {
         AlarmItem.COMPLETED -> SUCCESS
         AlarmItem.CANCELED -> DANGER
-        else -> Color.parseColor("#4DA3FF")
+        else -> Color.parseColor("#7BA3E0")
     }
 
     fun shape(ctx: Context, color: Int, radiusDp: Int, stroke: Int? = null): GradientDrawable =
@@ -49,11 +52,11 @@ object Ui {
             if (stroke != null) setStroke(dp(ctx, 1), stroke)
         }
 
-    /** بطاقة زجاجية داكنة بتدرّج مائل وحدّ مضيء. */
-    fun glass(ctx: Context, radiusDp: Int, stroke: Int = Color.parseColor("#4D7FA6FF")): GradientDrawable =
+    /** سطح بطاقة هادئ: تدرّج خفيف جداً وحدّ رفيع. */
+    fun glass(ctx: Context, radiusDp: Int, stroke: Int = Color.parseColor("#2F3B5C")): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.parseColor("#E01C2858"), Color.parseColor("#E00A1130"))
+            intArrayOf(Color.parseColor("#F01F2846"), Color.parseColor("#F0182039"))
         ).apply {
             cornerRadius = dp(ctx, radiusDp).toFloat()
             setStroke(dp(ctx, 1), stroke)
@@ -64,6 +67,10 @@ object Ui {
             cornerRadius = dp(ctx, radiusDp).toFloat()
         }
 
+    /** تموّج لمس خفيف فوق أي خلفية (يتطلب أن يكون العنصر clickable). */
+    fun ripple(content: Drawable): Drawable =
+        RippleDrawable(ColorStateList.valueOf(alpha(Color.WHITE, 46)), content, null)
+
     fun rtl(v: View) {
         v.layoutDirection = View.LAYOUT_DIRECTION_RTL
     }
@@ -73,8 +80,8 @@ object Ui {
         a.window.navigationBarColor = BG
     }
 
-    /** خط مزخرف لاسم التطبيق (cursive المتوفر في أندرويد). */
-    fun fancyFont(): Typeface = Typeface.create("cursive", Typeface.BOLD)
+    /** خط عنوان نظيف (بدون زخرفة). */
+    fun fancyFont(): Typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
 
     fun lp(
         ctx: Context,
@@ -92,7 +99,7 @@ object Ui {
             marginEnd = dp(ctx, end)
         }
 
-    fun text(ctx: Context, s: String, size: Float = 15f, color: Int = TEXT, bold: Boolean = false): TextView =
+    fun text(ctx: Context, s: String, size: Float = 14f, color: Int = TEXT, bold: Boolean = false): TextView =
         TextView(ctx).apply {
             text = s
             textSize = size
@@ -100,63 +107,78 @@ object Ui {
             if (bold) setTypeface(typeface, Typeface.BOLD)
         }
 
+    /** زر رئيسي (تدرّج هادئ) أو ثانوي (خلفية خافتة + حدّ). حجم مدمج وتفاعل لمس. */
     fun button(ctx: Context, s: String, filled: Boolean = true, color: Int = PRIMARY): TextView =
         TextView(ctx).apply {
             text = s
-            textSize = 16f
+            textSize = 14f
             gravity = Gravity.CENTER
             isClickable = true
             setTypeface(typeface, Typeface.BOLD)
-            val v = dp(ctx, 14)
-            setPadding(v, v, v, v)
+            val h = dp(ctx, 16)
+            val v = dp(ctx, 11)
+            setPadding(h, v, h, v)
             if (filled) {
-                background = gradient(ctx, color, VIOLET, 16)
+                background = ripple(gradient(ctx, color, VIOLET, 14))
                 setTextColor(Color.WHITE)
-                elevation = dp(ctx, 6).toFloat()
             } else {
-                background = shape(ctx, alpha(color, 30), 16, color)
+                background = ripple(shape(ctx, alpha(color, 26), 14, alpha(color, 120)))
                 setTextColor(color)
             }
+            attachPress(this, 0.96f)
+        }
+
+    /** حبّة صغيرة قابلة للنقر (للإجراءات داخل البطاقات). */
+    fun pill(ctx: Context, label: String, color: Int, onClick: () -> Unit): TextView =
+        TextView(ctx).apply {
+            text = label
+            textSize = 12f
+            setTextColor(color)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            isClickable = true
+            background = ripple(shape(ctx, alpha(color, 28), 12))
+            val h = dp(ctx, 12)
+            val v = dp(ctx, 6)
+            setPadding(h, v, h, v)
+            attachPress(this, 0.93f)
+            setOnClickListener { onClick() }
         }
 
     fun input(ctx: Context, hintText: String, type: Int = InputType.TYPE_CLASS_TEXT): EditText =
         EditText(ctx).apply {
             hint = hintText
             inputType = type
-            textSize = 16f
+            textSize = 15f
             setTextColor(TEXT)
             setHintTextColor(MUTED)
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            background = shape(ctx, INPUT_BG, 14, STROKE)
-            val v = dp(ctx, 14)
+            background = shape(ctx, INPUT_BG, 12, STROKE)
+            val v = dp(ctx, 12)
             setPadding(v, v, v, v)
         }
 
-    /** تأثير ثلاثي الأبعاد: تميل البطاقة نحو نقطة اللمس وتصغر قليلاً. */
-    fun attachTilt(v: View) {
-        v.cameraDistance = 12000f * v.resources.displayMetrics.density
+    /** تفاعل لمس: يصغر العنصر قليلاً عند الضغط ويعود عند الرفع. */
+    fun attachPress(v: View, scale: Float) {
         v.setOnTouchListener { view, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    val w = view.width.coerceAtLeast(1).toFloat()
-                    val h = view.height.coerceAtLeast(1).toFloat()
-                    val nx = (e.x / w - 0.5f).coerceIn(-0.5f, 0.5f)
-                    val ny = (e.y / h - 0.5f).coerceIn(-0.5f, 0.5f)
-                    view.animate().rotationY(nx * 14f).rotationX(-ny * 14f)
-                        .scaleX(0.975f).scaleY(0.975f).setDuration(90).start()
-                }
+                MotionEvent.ACTION_DOWN ->
+                    view.animate().scaleX(scale).scaleY(scale).setDuration(90).start()
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
-                    view.animate().rotationX(0f).rotationY(0f).scaleX(1f).scaleY(1f).setDuration(240).start()
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
             }
             false
         }
     }
 
+    /** للبطاقات: ضغطة ناعمة جداً. */
+    fun attachTilt(v: View) = attachPress(v, 0.985f)
+
     /** نافذة حوار داكنة موحّدة. */
     fun showDialog(act: Activity, builder: AlertDialog.Builder): AlertDialog {
         val dlg = builder.create()
         dlg.show()
-        dlg.window?.setBackgroundDrawable(shape(act, SURFACE_SOLID, 24, STROKE))
+        dlg.window?.setBackgroundDrawable(shape(act, SURFACE_SOLID, 20, STROKE))
         dlg.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(ACCENT)
         dlg.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(MUTED)
         return dlg

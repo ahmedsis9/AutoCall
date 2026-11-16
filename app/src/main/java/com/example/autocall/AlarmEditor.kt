@@ -27,7 +27,7 @@ object AlarmEditor {
         RadioButton(c).apply {
             text = label
             id = View.generateViewId()
-            textSize = 16f
+            textSize = 15f
             setTextColor(Ui.TEXT)
             buttonTintList = ColorStateList.valueOf(Ui.ACCENT)
         }
@@ -65,7 +65,7 @@ object AlarmEditor {
         }
 
         root.addView(
-            Ui.text(c, if (existing == null) "اتصال تلقائي جديد" else "تعديل الموعد", 20f, Ui.TEXT, true),
+            Ui.text(c, if (existing == null) "اتصال تلقائي جديد" else "تعديل الموعد", 18f, Ui.TEXT, true),
             Ui.lp(c, bottom = 14)
         )
 
@@ -101,7 +101,7 @@ object AlarmEditor {
         })
 
         val pick = Ui.button(c, "👤 اختيار من جهات الاتصال", filled = false, color = Ui.ACCENT)
-        pick.textSize = 14f
+        pick.textSize = 13f
         pick.setOnClickListener {
             act.pickContact { number, name ->
                 numberEt.setText(number)
@@ -113,7 +113,7 @@ object AlarmEditor {
         // ----- الوقت -----
         root.addView(Ui.text(c, "الوقت", 14f, Ui.MUTED, true), Ui.lp(c, bottom = 4))
         val timeBtn = Ui.button(c, formatTime(hour, minute), filled = false, color = Ui.ACCENT)
-        timeBtn.textSize = 22f
+        timeBtn.textSize = 20f
         timeBtn.setOnClickListener {
             TimePickerDialog(
                 act, android.R.style.Theme_Material_Dialog_Alert,
@@ -151,7 +151,7 @@ object AlarmEditor {
             if (dateMs > 0L) "📅 " + formatDateLong(dateMs) else "📅 اختر التاريخ",
             filled = false, color = Ui.VIOLET
         )
-        dateBtn.textSize = 15f
+        dateBtn.textSize = 14f
         dateBtn.visibility = if (repeat == AlarmItem.ONCE) View.VISIBLE else View.GONE
         dateBtn.setOnClickListener {
             ensureDate()
