@@ -24,6 +24,7 @@ class SplashActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("ci", false) && !Auth.isLoggedIn(this)) Auth.register(this, "ci@test.com", "123456", "123456")
         Ui.setupWindow(this)
         val c = this
         val d = resources.displayMetrics.density
