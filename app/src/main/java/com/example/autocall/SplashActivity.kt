@@ -66,12 +66,12 @@ class SplashActivity : Activity() {
         stage.addView(logo, FrameLayout.LayoutParams(logoSize, logoSize, Gravity.CENTER))
         col.addView(stage, Ui.lp(c, w = glowSize, h = glowSize))
 
-        val title = Ui.text(c, Ui.APP_NAME, 54f, Color.WHITE, true).apply {
+        val title = Ui.text(c, Ui.APP_NAME, 36f, Color.WHITE, true).apply {
             typeface = Ui.fancyFont()
             gravity = Gravity.CENTER
             setShadowLayer(26f, 0f, 0f, Ui.PRIMARY)
             alpha = 0f
-            letterSpacing = 0.5f
+            letterSpacing = 0.25f
         }
         col.addView(title, Ui.lp(c, top = 4))
 
@@ -117,7 +117,7 @@ class SplashActivity : Activity() {
         }
         // 4) العنوان يظهر ويتقارب حرفه
         title.animate().alpha(1f).setStartDelay(500).setDuration(900).setInterpolator(DecelerateInterpolator()).start()
-        ValueAnimator.ofFloat(0.5f, 0.06f).apply {
+        ValueAnimator.ofFloat(0.25f, 0.04f).apply {
             duration = 1400
             startDelay = 500
             interpolator = DecelerateInterpolator()

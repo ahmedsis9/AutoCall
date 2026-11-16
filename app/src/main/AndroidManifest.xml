@@ -17,7 +17,7 @@
     <application
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="Hamko"
+        android:label="Hasan AutoCalls"
         android:supportsRtl="true"
         android:theme="@style/HamkoTheme">
 

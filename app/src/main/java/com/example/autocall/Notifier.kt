@@ -16,12 +16,12 @@ object Notifier {
         if (nm.getNotificationChannel(CH_CALL) == null) {
             // قناة للحالات التي تحتاج تدخّلك: صوت عادي (وليس صوت منبّه)
             nm.createNotificationChannel(
-                NotificationChannel(CH_CALL, "مكالمات Hamko (تحتاج تدخلك)", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(CH_CALL, "مكالمات Hasan AutoCalls (تحتاج تدخلك)", NotificationManager.IMPORTANCE_HIGH)
             )
         }
         if (nm.getNotificationChannel(CH_STATUS) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CH_STATUS, "حالة Hamko", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CH_STATUS, "حالة Hasan AutoCalls", NotificationManager.IMPORTANCE_LOW)
             )
         }
     }

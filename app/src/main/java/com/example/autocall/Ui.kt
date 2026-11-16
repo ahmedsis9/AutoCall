@@ -30,7 +30,7 @@ object Ui {
     val SURFACE_SOLID: Int = Color.parseColor("#0F1733")
     val INPUT_BG: Int = Color.parseColor("#141E40")
 
-    const val APP_NAME = "Hamko"
+    const val APP_NAME = "Hasan AutoCalls"
 
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
 

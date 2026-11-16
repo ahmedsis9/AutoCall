@@ -37,7 +37,7 @@ class LoginActivity : Activity() {
 
         val root = FrameLayout(c).apply { setBackgroundColor(Ui.BG) }
         root.addView(
-            CinematicBackground(c).apply { intensity = 0.7f },
+            CinematicBackground(c).apply { intensity = 0.85f },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
 
@@ -63,7 +63,7 @@ class LoginActivity : Activity() {
         col.addView(logo, Ui.lp(c, w = Ui.dp(c, 110), h = Ui.dp(c, 110)))
 
         col.addView(
-            Ui.text(c, Ui.APP_NAME, 44f, Color.WHITE, true).apply {
+            Ui.text(c, Ui.APP_NAME, 30f, Color.WHITE, true).apply {
                 typeface = Ui.fancyFont()
                 gravity = Gravity.CENTER
                 setShadowLayer(22f, 0f, 0f, Ui.PRIMARY)

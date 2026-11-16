@@ -99,7 +99,7 @@ class MainActivity : Activity() {
 
         val root = FrameLayout(c).apply { setBackgroundColor(Ui.BG) }
         root.addView(
-            CinematicBackground(c).apply { intensity = 0.3f },
+            CinematicBackground(c).apply { intensity = 0.6f },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
         val col = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
@@ -316,7 +316,7 @@ class MainActivity : Activity() {
             })
         }
         if (!CallHelper.canOverlay(c)) {
-            issues.add(Issue("اسمح بـ «العرض فوق التطبيقات» ليتصل Hamko مباشرة والجهاز مقفل.", "السماح") {
+            issues.add(Issue("اسمح بـ «العرض فوق التطبيقات» ليتصل التطبيق مباشرة والجهاز مقفل.", "السماح") {
                 try {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 } catch (e: Exception) {
@@ -336,7 +336,7 @@ class MainActivity : Activity() {
         }
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-            issues.add(Issue("لضمان العمل والجهاز مقفل، اجعل البطارية لـ Hamko «بدون قيود».", "الإعدادات") {
+            issues.add(Issue("لضمان العمل والجهاز مقفل، اجعل البطارية للتطبيق «بدون قيود».", "الإعدادات") {
                 try {
                     startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                 } catch (e: Exception) {
