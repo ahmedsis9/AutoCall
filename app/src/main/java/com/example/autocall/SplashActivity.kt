@@ -73,7 +73,21 @@ class SplashActivity : Activity() {
             alpha = 0f
             letterSpacing = 0.25f
         }
-        col.addView(title, Ui.lp(c, top = 4))
+        // الاسم + «by hamko» صغيرة أسفل يمين الاسم
+        val by = Ui.text(c, "by hamko", 13f, Ui.ACCENT, true).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            alpha = 0f
+        }
+        val titleBox = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        titleBox.addView(title, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        titleBox.addView(
+            by,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.RIGHT
+                topMargin = Ui.dp(c, 2)
+            }
+        )
+        col.addView(titleBox, Ui.lp(c, w = LinearLayout.LayoutParams.WRAP_CONTENT, top = 4))
 
         val sub = Ui.text(c, "", 15f, Ui.ACCENT).apply { gravity = Gravity.CENTER }
         col.addView(sub, Ui.lp(c, top = 6))
@@ -116,6 +130,7 @@ class SplashActivity : Activity() {
             start()
         }
         // 4) العنوان يظهر ويتقارب حرفه
+        by.animate().alpha(1f).setStartDelay(1400).setDuration(700).start()
         title.animate().alpha(1f).setStartDelay(500).setDuration(900).setInterpolator(DecelerateInterpolator()).start()
         ValueAnimator.ofFloat(0.25f, 0.04f).apply {
             duration = 1400

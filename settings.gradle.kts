@@ -11,5 +11,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "HasanAutoCalls"
+rootProject.name = "AutoCaller"
 include(":app")
